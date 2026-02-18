@@ -3,14 +3,15 @@ import { supabase } from "../utils/supabase";
 import { getQuestions } from "../utils/questions";
 
 export const createMatch = async (req: Request, res: Response) => {
-    const { time_per_que, category, total_questions } = req.body;
-    let userID = "owneroftheroom";
+    const { time_per_que, category, total_questions, stake_amount } = req.body;
+    const { userID } = req;
     try {
-        const { data, error } = await supabase.from('match').insert({
-            createdBy: userID,
-            time_per_que,
+        const { data, error } = await supabase.from('matches').insert({
+            player1_id: userID,
+            question_duration_seconds: time_per_que,
+            total_questions,
             category,
-            total_questions
+            stake_amount
         }).select().single()
         if (error || !data) {
             console.log("Error while creating room: ", error);
@@ -23,16 +24,17 @@ export const createMatch = async (req: Request, res: Response) => {
 
         const questions = await getQuestions(category, total_questions);
 
-        const { data: match_questions, error: match_questions_error } = await supabase
+        const { error: match_questions_error } = await supabase
             .from('match_questions')
-            .insert(questions.map((question) => ({
+            .insert(questions.map((question, index) => ({
                 match_id: data.id,
-                question: question.question,
+                question_text: question.question,
+                question_index: index,
                 options: question.options,
-                answer: question.answer
+                correct_option: question.answer
             })))
 
-        if (match_questions_error || !match_questions) {
+        if (match_questions_error) {
             console.log("Error while creating questions: ", match_questions_error);
 
             return res.status(500).json({
@@ -45,7 +47,7 @@ export const createMatch = async (req: Request, res: Response) => {
         return res.json({
             data: {
                 match: data,
-                questions: match_questions
+                questions: questions
             },
             status: "SUCCESS"
         })

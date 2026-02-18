@@ -1,15 +1,16 @@
 import dotenv from 'dotenv'
+dotenv.config()
 import express from 'express'
 import { matchRouter } from './routes/match';
+import { auth } from './middleware';
 
 
-dotenv.config()
 
 const app = express();
 app.use(express.json())
 const PORT = 8080;
 
-app.use('/api/match', matchRouter);
+app.use('/api/match', auth, matchRouter);
 
 
 
