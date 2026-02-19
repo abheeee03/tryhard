@@ -40,3 +40,21 @@ export interface MatchQuestion {
     correct_option: string;
     created_at: Date;
 }
+
+export interface MatchAnswers {
+    id: string,
+    match_id: string,
+    player_id: string,
+    question_id: string,
+    user_answer: string,
+    created_at: string
+}
+
+export interface Question {
+    question: string,
+    options: {
+        index: number,
+        option: string
+    }[],
+    answer: number
+}
