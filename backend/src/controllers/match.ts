@@ -194,3 +194,62 @@ export const startMatch = async (req: Request, res: Response) => {
 
 
 }
+
+
+export const submitAnswer = async (req: Request, res: Response) => {
+    const { answer, question_id } = req.body;
+    const match_id = req.params.id;
+
+    const normalizedAnswer = String(answer);
+    if (!["0", "1", "2", "3"].includes(normalizedAnswer)) {
+        return res.status(400).json({
+            status: "FAILED",
+            error: "Invalid answer. Must be an option index: 0, 1, 2, or 3"
+        });
+    }
+
+    const { data: matchData, error: matchErr } = await supabase
+        .from("matches")
+        .select("*")
+        .eq("id", match_id).single()
+
+    if (matchErr) {
+        return res.json({
+            status: "FAILED",
+            error: "No Match Found, Or Something went wrong"
+        })
+    }
+
+    if (matchData.status != "active") {
+        return res.json({
+            status: "FAILED",
+            error: "Match is not active"
+        })
+    }
+
+    const { data, error } = await supabase
+        .from("match_answers")
+        .insert({
+            match_id,
+            user_answer: normalizedAnswer,
+            question_id,
+            player_id: req.userID
+        })
+
+    if (error) {
+        console.log("failed answer submission: ", error);
+        return res.json({
+            status: "FAILED",
+            error: "Error Submitting Answers"
+        })
+    }
+
+    console.log("answer submitted : ", data);
+
+    res.json({
+        status: "SUCCESS",
+        data: {
+            message: "Answer Submitted"
+        }
+    })
+}
