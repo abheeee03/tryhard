@@ -1,5 +1,6 @@
 import { NextFunction, Response, Request } from "express";
-import jwt from 'jsonwebtoken'
+import { supabase } from "./utils/supabase";
+
 export const auth = async (req: Request, res: Response, next: NextFunction) => {
     const token = req.headers.authorization;
     if (!token) {
@@ -9,15 +10,15 @@ export const auth = async (req: Request, res: Response, next: NextFunction) => {
         })
     }
 
-    //using dummy jwt for now. later this will be replaced by supabase auth jwt
-    const data = jwt.verify(token, process.env.JWT_SECRET!) as { id: string };
-    if (!data.id) {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
         return res.json({
             status: "FAILED",
             error: "Unauthorized"
         })
     }
-    req.userID = data.id;
-    console.log("Decoded userID : ", data.id);
+
+    req.userID = user.id;
+    console.log("Decoded userID : ", user.id);
     next()
 }
