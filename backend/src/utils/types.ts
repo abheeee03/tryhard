@@ -1,6 +1,7 @@
 export type MatchStatus =
     | "waiting"
     | "ready"
+    | "starting"
     | "active"
     | "finished"
     | "cancelled";

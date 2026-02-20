@@ -168,9 +168,7 @@ export const startMatch = async (req: Request, res: Response) => {
     const { data: updateMatch, error: updateMatchError } = await supabase
         .from("matches")
         .update({
-            status: "active",
-            current_question_index: 0,
-            question_start_time: new Date(),
+            status: "starting",
             started_at: new Date()
         })
         .eq("id", matchID)

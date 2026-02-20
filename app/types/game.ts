@@ -1,4 +1,4 @@
-export type MatchStatus = "waiting" | "ready" | "active" | "finished" | "cancelled";
+export type MatchStatus = "waiting" | "ready" | "starting" | "active" | "finished" | "cancelled";
 
 export interface Match {
     id: string;

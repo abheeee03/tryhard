@@ -1,8 +1,8 @@
 import { supabase } from "../utils/supabase";
 
+const PRE_GAME_COUNTDOWN_SECONDS = 5;
+
 let engineInterval: NodeJS.Timeout | null = null;
-
-
 
 const finishMatch = async (matchId: string) => {
     console.log(`[finishMatch] Starting for match ${matchId}`);
@@ -31,6 +31,7 @@ const finishMatch = async (matchId: string) => {
         console.error(`[finishMatch] Match ${matchId} missing player IDs — skipping.`);
         return;
     }
+
     const { data: questions, error: questionsErr } = await supabase
         .from("match_questions")
         .select("id, correct_option")
@@ -78,7 +79,6 @@ const finishMatch = async (matchId: string) => {
     } else if (player2Score > player1Score) {
         winner_id = match.player2_id;
     }
-    // null → draw
 
     const { data: updatedRows, error: updateErr } = await supabase
         .from("matches")
@@ -107,7 +107,6 @@ const finishMatch = async (matchId: string) => {
 
     if (winner_id) {
         const loserId = winner_id === match.player1_id ? match.player2_id : match.player1_id;
-
         statsUpdates.push(
             Promise.resolve(supabase.rpc("increment_player_stats", {
                 p_user_id: winner_id,
@@ -116,7 +115,6 @@ const finishMatch = async (matchId: string) => {
                 p_losses: 0,
             }))
         );
-
         statsUpdates.push(
             Promise.resolve(supabase.rpc("increment_player_stats", {
                 p_user_id: loserId,
@@ -126,7 +124,6 @@ const finishMatch = async (matchId: string) => {
             }))
         );
     } else {
-        // Draw — increment matches_played only, no wins or losses
         statsUpdates.push(
             Promise.resolve(supabase.rpc("increment_player_stats", {
                 p_user_id: match.player1_id,
@@ -156,7 +153,8 @@ const finishMatch = async (matchId: string) => {
 };
 
 const advanceMatch = async (match: any) => {
-    if (match.current_question_index < match.total_questions) {
+    // Check if there are more questions after current index
+    if (match.current_question_index + 1 < match.total_questions) {
         await supabase
             .from("matches")
             .update({
@@ -166,12 +164,47 @@ const advanceMatch = async (match: any) => {
             .eq("id", match.id)
             .eq("status", "active");
 
-        console.log(`Advanced match ${match.id}`);
+        console.log(`Advanced match ${match.id} to question ${match.current_question_index + 1}`);
     } else {
         await finishMatch(match.id);
     }
 }
 
+/** Handle matches in the 'starting' phase — transition to active after pre-game countdown */
+const processStartingMatches = async () => {
+    const { data: matches, error } = await supabase
+        .from("matches")
+        .select("*")
+        .eq("status", "starting");
+
+    if (error || !matches) return;
+
+    const now = new Date();
+
+    for (const match of matches) {
+        if (!match.started_at) continue;
+        const start = new Date(match.started_at);
+        const elapsed = (now.getTime() - start.getTime()) / 1000;
+
+        if (elapsed >= PRE_GAME_COUNTDOWN_SECONDS) {
+            const { error: updateErr } = await supabase
+                .from("matches")
+                .update({
+                    status: "active",
+                    current_question_index: 0,
+                    question_start_time: new Date().toISOString(),
+                })
+                .eq("id", match.id)
+                .eq("status", "starting"); // guard against race
+
+            if (!updateErr) {
+                console.log(`[engine] Match ${match.id} transitioned starting → active`);
+            }
+        }
+    }
+};
+
+/** Handle matches in the 'active' phase — advance or finish on question timeout */
 const processActiveMatches = async () => {
     const { data: matches, error } = await supabase
         .from("matches")
@@ -186,8 +219,7 @@ const processActiveMatches = async () => {
         if (!match.question_start_time) continue;
 
         const start = new Date(match.question_start_time);
-        const elapsed =
-            (now.getTime() - start.getTime()) / 1000;
+        const elapsed = (now.getTime() - start.getTime()) / 1000;
 
         if (elapsed >= match.question_duration_seconds) {
             await advanceMatch(match);
@@ -203,6 +235,7 @@ export const startGameEngine = () => {
 
     engineInterval = setInterval(async () => {
         try {
+            await processStartingMatches();
             await processActiveMatches();
         } catch (err) {
             console.error("Engine error:", err);

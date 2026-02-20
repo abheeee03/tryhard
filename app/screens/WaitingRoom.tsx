@@ -32,28 +32,40 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
         ).start()
     }, [])
 
+    const navigateToGame = async (matchRow: Match) => {
+        const { data: questions } = await supabase
+            .from('match_questions')
+            .select('id, question_index, question_text, options')
+            .eq('match_id', matchId)
+            .order('question_index', { ascending: true })
+        onNavigate('game', { matchId, questions, match: matchRow })
+    }
+
     useEffect(() => {
         supabase
             .from('matches')
             .select('*')
             .eq('id', matchId)
             .single()
-            .then(({ data }) => setMatch(data as Match))
+            .then(({ data }) => {
+                if (data) {
+                    setMatch(data as Match)
+                    // If navigating to an already-starting/active match
+                    if (data.status === 'starting' || data.status === 'active') {
+                        navigateToGame(data as Match)
+                    }
+                }
+            })
 
         const channel = supabase
-            .channel(`match-${matchId}`)
+            .channel(`waiting-${matchId}`)
             .on('postgres_changes', {
                 event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}`
             }, async ({ new: updated }) => {
                 const m = updated as Match
                 setMatch(m)
-                if (m.status === 'active') {
-                    const { data: questions } = await supabase
-                        .from('match_questions')
-                        .select('id, question_index, question_text, options')
-                        .eq('match_id', matchId)
-                        .order('question_index', { ascending: true })
-                    onNavigate('game', { matchId, questions, match: m })
+                if (m.status === 'starting' || m.status === 'active') {
+                    navigateToGame(m)
                 }
             })
             .subscribe()
@@ -63,15 +75,11 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
     const handleStart = async () => {
         setStarting(true)
         const res = await startMatch(session.access_token, matchId)
-        if (res.status !== 'SUCCESS') {
-            setStarting(false)
-        }
+        if (res.status !== 'SUCCESS') setStarting(false)
     }
 
     const s = makeStyles(theme)
-
     const isReady = match?.status === 'ready'
-    const isWaiting = !match || match.status === 'waiting'
 
     return (
         <View style={s.container}>
@@ -84,7 +92,6 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
             </View>
 
             <View style={s.body}>
-                {/* Match ID Badge */}
                 <View style={s.idCard}>
                     <Text style={s.idLabel}>MATCH ID</Text>
                     <TouchableOpacity onPress={() => Clipboard.setString(matchId)}>
@@ -93,28 +100,21 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
                     </TouchableOpacity>
                 </View>
 
-                {/* Status */}
                 <View style={s.statusBlock}>
                     <Animated.Text style={[s.bigIcon, { opacity: isReady ? 1 : dotAnim }]}>
                         {isReady ? '🎮' : '⏳'}
                     </Animated.Text>
                     <Text style={s.statusTitle}>
-                        {isReady
-                            ? 'Opponent Joined!'
-                            : 'Waiting for opponent…'
-                        }
+                        {isReady ? 'Opponent Joined!' : 'Waiting for opponent…'}
                     </Text>
                     <Text style={s.statusSub}>
                         {isPlayer1
-                            ? isReady
-                                ? 'You can now start the match'
-                                : 'Share the Match ID with a friend'
+                            ? isReady ? 'You can now start the match' : 'Share the Match ID with a friend'
                             : 'Waiting for Player 1 to start…'
                         }
                     </Text>
                 </View>
 
-                {/* Player slots */}
                 <View style={s.playersRow}>
                     <View style={s.playerSlot}>
                         <View style={[s.playerDot, { backgroundColor: theme.accent }]} />
@@ -171,9 +171,9 @@ const makeStyles = (theme: any) => StyleSheet.create({
     playerLabel: { color: theme.textSecondary, fontWeight: '700', fontSize: 12, letterSpacing: 1 },
     vs: { fontSize: 18, fontWeight: '900', color: theme.accent },
     startBtn: {
-        backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 18,
-        paddingHorizontal: 40, alignItems: 'center',
-        shadowColor: theme.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10,
+        backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 18, paddingHorizontal: 40,
+        alignItems: 'center', shadowColor: theme.accent,
+        shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10,
     },
     startBtnText: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 1.5 },
 })
