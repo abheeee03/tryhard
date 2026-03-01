@@ -41,6 +41,9 @@ export default function Game({ session, matchId, questions, initialMatch, onNavi
     const [timeLeft, setTimeLeft] = useState(initialMatch.question_duration_seconds)
     const [answered, setAnswered] = useState<Set<number>>(new Set())
     const [selected, setSelected] = useState<number | null>(null)
+    const [questionPhaseStart, setQuestionPhaseStart] = useState<number | null>(
+        initialMatch.status !== 'starting' ? Date.now() : null
+    )
     const [tipIndex] = useState(() => Math.floor(Math.random() * TIPS.length))
 
     // Animations
@@ -101,6 +104,7 @@ export default function Game({ session, matchId, questions, initialMatch, onNavi
     const showQuestion = () => {
         questionSlide.setValue(30)
         questionOpacity.setValue(0)
+        setQuestionPhaseStart(Date.now())
         setPhase('question')
         Animated.parallel([
             Animated.timing(questionOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
@@ -110,19 +114,19 @@ export default function Game({ session, matchId, questions, initialMatch, onNavi
 
     // ─── In-game numeric timer ─────────────────────────────────────────────────
     useEffect(() => {
-        if (phase !== 'question') return
+        if (phase !== 'question' || !questionPhaseStart) return
+        // Immediately set the full duration so the first render isn't stale
+        setTimeLeft(match.question_duration_seconds)
         const interval = setInterval(() => {
-            if (match.question_start_time) {
-                const elapsed = (Date.now() - new Date(match.question_start_time).getTime()) / 1000
-                const remaining = Math.max(0, match.question_duration_seconds - elapsed)
-                const secs = Math.ceil(remaining)
-                setTimeLeft(secs)
-                // Update timer color value: 1 = green, 0 = red
-                timerColor.setValue(remaining / match.question_duration_seconds)
-            }
+            const elapsed = (Date.now() - questionPhaseStart) / 1000
+            const remaining = Math.max(0, match.question_duration_seconds - elapsed)
+            const secs = Math.ceil(remaining)
+            setTimeLeft(secs)
+            // Update timer color value: 1 = green, 0 = red
+            timerColor.setValue(remaining / match.question_duration_seconds)
         }, 200)
         return () => clearInterval(interval)
-    }, [phase, match.current_question_index, match.question_start_time])
+    }, [phase, match.current_question_index, questionPhaseStart])
 
     // ─── Supabase Realtime ─────────────────────────────────────────────────────
     useEffect(() => {

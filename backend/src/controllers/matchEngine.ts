@@ -1,6 +1,7 @@
 import { supabase } from "../utils/supabase";
 
 const PRE_GAME_COUNTDOWN_SECONDS = 5;
+const INTER_QUESTION_BUFFER_SECONDS = 3; // Must match client-side INTER_Q_SECONDS
 
 let engineInterval: NodeJS.Timeout | null = null;
 
@@ -221,7 +222,9 @@ const processActiveMatches = async () => {
         const start = new Date(match.question_start_time);
         const elapsed = (now.getTime() - start.getTime()) / 1000;
 
-        if (elapsed >= match.question_duration_seconds) {
+        // Add inter-question buffer so the client's interlude screen
+        // doesn't eat into the player's answer time
+        if (elapsed >= match.question_duration_seconds + INTER_QUESTION_BUFFER_SECONDS) {
             await advanceMatch(match);
         }
     }
