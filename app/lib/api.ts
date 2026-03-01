@@ -28,3 +28,6 @@ export const submitAnswer = (
     matchId: string,
     payload: { answer: number; question_id: string }
 ) => apiRequest(`/api/match/${matchId}/submit`, 'POST', payload, token);
+
+export const findMatchByCode = (token: string, code: string) =>
+    apiRequest(`/api/match/code/${code}`, 'GET', undefined, token);

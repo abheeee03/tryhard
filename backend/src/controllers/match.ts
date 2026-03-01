@@ -2,17 +2,24 @@ import { Request, Response } from "express";
 import { supabase } from "../utils/supabase";
 import { generateQuestions } from "../utils/questions";
 import { Question } from "../utils/types";
+import crypto from "crypto";
+
+function generateMatchCode(): string {
+    return crypto.randomBytes(3).toString('hex').toUpperCase(); // 6-char hex e.g. "A3F1B2"
+}
 
 export const createMatch = async (req: Request, res: Response) => {
     const { time_per_que, category, total_questions, stake_amount, difficulty } = req.body;
     const { userID } = req;
     try {
+        const matchCode = generateMatchCode();
         const { data, error } = await supabase.from('matches').insert({
             player1_id: userID,
             question_duration_seconds: time_per_que,
             total_questions,
             category,
-            stake_amount
+            stake_amount,
+            match_code: matchCode
         }).select().single()
         if (error || !data) {
             console.log("Error while creating room: ", error);
@@ -250,4 +257,33 @@ export const submitAnswer = async (req: Request, res: Response) => {
             message: "Answer Submitted"
         }
     })
+}
+
+export const findMatchByCode = async (req: Request, res: Response) => {
+    const code = req.params.code as string;
+
+    if (!code || code.length !== 6) {
+        return res.status(400).json({
+            status: "FAILED",
+            error: "Invalid match code. Must be 6 characters."
+        });
+    }
+
+    const { data, error } = await supabase
+        .from("matches")
+        .select("*")
+        .eq("match_code", code.toUpperCase())
+        .single();
+
+    if (error || !data) {
+        return res.status(404).json({
+            status: "FAILED",
+            error: "No match found with that code"
+        });
+    }
+
+    return res.json({
+        status: "SUCCESS",
+        data: { match: data }
+    });
 }

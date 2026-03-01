@@ -11,6 +11,7 @@ export interface Match {
     current_question_index: number;
     question_start_time: string | null;
     question_duration_seconds: number;
+    match_code: string;
     total_questions: number;
     created_at: string;
     started_at: string | null;

@@ -93,10 +93,10 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
 
             <View style={s.body}>
                 <View style={s.idCard}>
-                    <Text style={s.idLabel}>MATCH ID</Text>
-                    <TouchableOpacity onPress={() => Clipboard.setString(matchId)}>
-                        <Text style={s.idValue}>{matchId.slice(0, 8).toUpperCase()}</Text>
-                        <Text style={s.idHint}>Tap to copy full ID</Text>
+                    <Text style={s.idLabel}>MATCH CODE</Text>
+                    <TouchableOpacity onPress={() => Clipboard.setString(match?.match_code ?? matchId)}>
+                        <Text style={s.idValue}>{match?.match_code ?? matchId.slice(0, 8).toUpperCase()}</Text>
+                        <Text style={s.idHint}>Tap to copy — share with a friend!</Text>
                     </TouchableOpacity>
                 </View>
 

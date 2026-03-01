@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
     View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator,
-    RefreshControl, Animated, Alert
+    RefreshControl, Animated, Alert, TextInput
 } from 'react-native'
 import { supabase } from '../lib/supabase'
-import { joinMatch } from '../lib/api'
+import { joinMatch, findMatchByCode } from '../lib/api'
 import { Match } from '../types/game'
 import { useTheme } from '../context/ThemeContext'
 import { Session } from '@supabase/supabase-js'
@@ -25,6 +25,8 @@ export default function HomeTab({ session, onNavigate }: Props) {
     const [matches, setMatches] = useState<Match[]>([])
     const [loading, setLoading] = useState(true)
     const [joining, setJoining] = useState<string | null>(null)
+    const [searchCode, setSearchCode] = useState('')
+    const [searching, setSearching] = useState(false)
     const fabScale = useRef(new Animated.Value(1)).current
 
     const fetchMatches = async () => {
@@ -71,6 +73,35 @@ export default function HomeTab({ session, onNavigate }: Props) {
         }
     }
 
+    const handleCodeSearch = async () => {
+        const code = searchCode.trim().toUpperCase()
+        if (code.length !== 6) {
+            Alert.alert('Invalid Code', 'Match code must be exactly 6 characters.')
+            return
+        }
+        setSearching(true)
+        try {
+            const res = await findMatchByCode(session.access_token, code)
+            if (res.status === 'SUCCESS' && res.data?.match) {
+                const match = res.data.match
+                if (match.status === 'waiting') {
+                    handleJoin(match.id)
+                } else if (match.player1_id === session.user.id || match.player2_id === session.user.id) {
+                    onNavigate('waitingRoom', { matchId: match.id, isPlayer1: match.player1_id === session.user.id })
+                } else {
+                    Alert.alert('Match Unavailable', 'This match is no longer accepting players.')
+                }
+            } else {
+                Alert.alert('Not Found', res.error ?? 'No match found with that code.')
+            }
+        } catch {
+            Alert.alert('Error', 'Failed to search for match.')
+        } finally {
+            setSearching(false)
+            setSearchCode('')
+        }
+    }
+
     const s = makeStyles(theme)
 
     const renderCard = ({ item }: { item: Match }) => {
@@ -112,6 +143,32 @@ export default function HomeTab({ session, onNavigate }: Props) {
             <View style={s.header}>
                 <Text style={s.headerTitle}>⚔ TRYHARD</Text>
                 <Text style={s.headerSub}>Live Battles</Text>
+            </View>
+
+            {/* Search by match code */}
+            <View style={s.searchBar}>
+                <TextInput
+                    style={s.searchInput}
+                    placeholder="Enter 6-digit match code"
+                    placeholderTextColor={theme.textSecondary}
+                    value={searchCode}
+                    onChangeText={(t) => setSearchCode(t.toUpperCase().slice(0, 6))}
+                    autoCapitalize="characters"
+                    maxLength={6}
+                    returnKeyType="search"
+                    onSubmitEditing={handleCodeSearch}
+                />
+                <TouchableOpacity
+                    style={[s.searchBtn, searchCode.length !== 6 && { opacity: 0.5 }]}
+                    onPress={handleCodeSearch}
+                    disabled={searching || searchCode.length !== 6}
+                    activeOpacity={0.8}
+                >
+                    {searching
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <Text style={s.searchBtnText}>JOIN</Text>
+                    }
+                </TouchableOpacity>
             </View>
 
             <FlatList
@@ -182,6 +239,44 @@ const makeStyles = (theme: any) => StyleSheet.create({
         fontSize: 13,
         color: theme.textSecondary,
         marginTop: 2,
+        letterSpacing: 1,
+    },
+    searchBar: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        gap: 10,
+        backgroundColor: theme.surface,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.border,
+    },
+    searchInput: {
+        flex: 1,
+        backgroundColor: theme.card,
+        borderRadius: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        color: theme.text,
+        fontSize: 16,
+        fontWeight: '800',
+        letterSpacing: 4,
+        textAlign: 'center',
+        borderWidth: 1,
+        borderColor: theme.border,
+    },
+    searchBtn: {
+        backgroundColor: theme.accent,
+        borderRadius: 12,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    searchBtnText: {
+        color: '#fff',
+        fontWeight: '900',
+        fontSize: 14,
         letterSpacing: 1,
     },
     list: { padding: 16, paddingBottom: 100 },
