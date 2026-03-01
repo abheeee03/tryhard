@@ -91,8 +91,9 @@ pub mod pvp_escrow {
     pub fn draw(ctx: Context<Draw>, _game_id: String) -> Result<()> {
         let escrow = &ctx.accounts.escrow;
         require!(escrow.is_joined, ErrorCode::GameNotJoined);
+        require_keys_eq!(ctx.accounts.player1.key(), escrow.player1,    ErrorCode::InvalidPlayer1);
+        require_keys_eq!(ctx.accounts.player2.key(), escrow.player2, ErrorCode::InvalidPlayer2);
 
-        // For a draw, we manually return player2's deposit. 
         let amount = escrow.bet_amount;
         **ctx.accounts.escrow.to_account_info().try_borrow_mut_lamports()? -= amount;
         **ctx.accounts.player2.to_account_info().try_borrow_mut_lamports()? += amount;
@@ -186,10 +187,12 @@ pub struct Cancel<'info> {
 pub struct Draw<'info> {
     pub backend_auth: Signer<'info>,
 
-    #[account(mut, address = escrow.player1 @ ErrorCode::InvalidPlayer1)]
+    /// CHECK: validated manually in the instruction body
+    #[account(mut)]
     pub player1: AccountInfo<'info>,
 
-    #[account(mut, address = escrow.player2 @ ErrorCode::InvalidPlayer2)]
+    /// CHECK: validated manually in the instruction body
+    #[account(mut)]
     pub player2: AccountInfo<'info>,
 
     #[account(
@@ -197,7 +200,7 @@ pub struct Draw<'info> {
         seeds = [b"escrow", game_id.as_bytes()],
         bump = escrow.bump,
         has_one = backend_auth,
-        close = player1 
+        close = player1
     )]
     pub escrow: Account<'info, GameEscrow>,
 }
