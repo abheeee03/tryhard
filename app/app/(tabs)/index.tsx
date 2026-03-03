@@ -3,11 +3,13 @@ import {
     View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator,
     RefreshControl, Animated, Alert, TextInput
 } from 'react-native'
-import { supabase } from '../lib/supabase'
-import { joinMatch, findMatchByCode } from '../lib/api'
-import { Match } from '../types/game'
-import { useTheme } from '../context/ThemeContext'
-import { Session } from '@supabase/supabase-js'
+import { useRouter } from 'expo-router'
+import { supabase } from '@/src/lib/supabase'
+import { joinMatch, findMatchByCode } from '@/src/lib/api'
+import { Match } from '@/src/types/game'
+import { useTheme } from '@/src/context/ThemeContext'
+import { useSession } from '@/src/hooks/useSession'
+import { useGameStore } from '@/src/stores/useGameStore'
 
 const DIFFICULTY_COLOR: Record<string, string> = {
     easy: '#00C9A7',
@@ -15,13 +17,11 @@ const DIFFICULTY_COLOR: Record<string, string> = {
     hard: '#FF4757',
 }
 
-type Props = {
-    session: Session
-    onNavigate: (screen: string, params?: any) => void
-}
-
-export default function HomeTab({ session, onNavigate }: Props) {
+export default function HomeTab() {
     const { theme } = useTheme()
+    const { session } = useSession()
+    const router = useRouter()
+    const setMatchId = useGameStore((s) => s.setMatchId)
     const [matches, setMatches] = useState<Match[]>([])
     const [loading, setLoading] = useState(true)
     const [joining, setJoining] = useState<string | null>(null)
@@ -31,23 +31,18 @@ export default function HomeTab({ session, onNavigate }: Props) {
 
     const fetchMatches = async () => {
         setLoading(true)
-        const res = await fetch(`${process.env.EXPO_PUBLIC_BACKEND_URL}/ping`, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' },
-        })
-        console.log("res from ping : ", res);
-
         const { data } = await supabase
             .from('matches')
             .select('*')
             .eq('status', 'waiting')
-            .neq('player1_id', session.user.id)
+            .neq('player1_id', session?.user.id ?? '')
             .order('created_at', { ascending: false })
         setMatches((data as Match[]) ?? [])
         setLoading(false)
     }
 
     useEffect(() => {
+        if (!session) return
         fetchMatches()
         const channel = supabase
             .channel('public:matches')
@@ -56,29 +51,25 @@ export default function HomeTab({ session, onNavigate }: Props) {
             })
             .subscribe()
         return () => { supabase.removeChannel(channel) }
-    }, [])
+    }, [session])
 
     const handleJoin = async (matchId: string) => {
+        if (!session) return
         setJoining(matchId)
-        const token = session.access_token
-        console.log("joining match");
-        const res = await joinMatch(token, matchId)
-        console.log("res from joining : ", res);
+        const res = await joinMatch(session.access_token, matchId)
         setJoining(null)
         if (res.status === 'SUCCESS') {
-            onNavigate('waitingRoom', { matchId, isPlayer1: false })
-            console.log("navigating to waiting room");
+            setMatchId(matchId, false)
+            router.push('/waiting-room')
         } else {
             Alert.alert('Could not join', res.error ?? 'Unknown error')
         }
     }
 
     const handleCodeSearch = async () => {
+        if (!session) return
         const code = searchCode.trim().toUpperCase()
-        if (code.length !== 6) {
-            Alert.alert('Invalid Code', 'Match code must be exactly 6 characters.')
-            return
-        }
+        if (code.length !== 6) { Alert.alert('Invalid Code', 'Match code must be exactly 6 characters.'); return }
         setSearching(true)
         try {
             const res = await findMatchByCode(session.access_token, code)
@@ -87,7 +78,8 @@ export default function HomeTab({ session, onNavigate }: Props) {
                 if (match.status === 'waiting') {
                     handleJoin(match.id)
                 } else if (match.player1_id === session.user.id || match.player2_id === session.user.id) {
-                    onNavigate('waitingRoom', { matchId: match.id, isPlayer1: match.player1_id === session.user.id })
+                    setMatchId(match.id, match.player1_id === session.user.id)
+                    router.push('/waiting-room')
                 } else {
                     Alert.alert('Match Unavailable', 'This match is no longer accepting players.')
                 }
@@ -105,7 +97,6 @@ export default function HomeTab({ session, onNavigate }: Props) {
     const s = makeStyles(theme)
 
     const renderCard = ({ item }: { item: Match }) => {
-        const diffColor = DIFFICULTY_COLOR[item.category?.toLowerCase?.()] ?? theme.accent
         const isJoining = joining === item.id
         return (
             <View style={s.card}>
@@ -145,7 +136,6 @@ export default function HomeTab({ session, onNavigate }: Props) {
                 <Text style={s.headerSub}>Live Battles</Text>
             </View>
 
-            {/* Search by match code */}
             <View style={s.searchBar}>
                 <TextInput
                     style={s.searchInput}
@@ -195,10 +185,9 @@ export default function HomeTab({ session, onNavigate }: Props) {
                 }
             />
 
-            {/* FAB */}
             <Animated.View style={[s.fab, { transform: [{ scale: fabScale }] }]}>
                 <TouchableOpacity
-                    onPress={() => onNavigate('createMatch')}
+                    onPress={() => router.push('/create-match')}
                     onPressIn={() => Animated.spring(fabScale, { toValue: 0.9, useNativeDriver: true }).start()}
                     onPressOut={() => Animated.spring(fabScale, { toValue: 1, useNativeDriver: true }).start()}
                     activeOpacity={0.9}
@@ -222,95 +211,39 @@ function MetaChip({ icon, label, theme }: { icon: string; label: string; theme: 
 const makeStyles = (theme: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.bg },
     header: {
-        paddingTop: 56,
-        paddingBottom: 16,
-        paddingHorizontal: 24,
-        backgroundColor: theme.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
+        paddingTop: 56, paddingBottom: 16, paddingHorizontal: 24,
+        backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border,
     },
-    headerTitle: {
-        fontSize: 26,
-        fontWeight: '900',
-        color: theme.accent,
-        letterSpacing: 4,
-    },
-    headerSub: {
-        fontSize: 13,
-        color: theme.textSecondary,
-        marginTop: 2,
-        letterSpacing: 1,
-    },
+    headerTitle: { fontSize: 26, fontWeight: '900', color: theme.accent, letterSpacing: 4 },
+    headerSub: { fontSize: 13, color: theme.textSecondary, marginTop: 2, letterSpacing: 1 },
     searchBar: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        gap: 10,
-        backgroundColor: theme.surface,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.border,
+        flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12,
+        gap: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border,
     },
     searchInput: {
-        flex: 1,
-        backgroundColor: theme.card,
-        borderRadius: 12,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        color: theme.text,
-        fontSize: 16,
-        fontWeight: '800',
-        letterSpacing: 4,
-        textAlign: 'center',
-        borderWidth: 1,
-        borderColor: theme.border,
+        flex: 1, backgroundColor: theme.card, borderRadius: 12, paddingHorizontal: 16,
+        paddingVertical: 12, color: theme.text, fontSize: 16, fontWeight: '800',
+        letterSpacing: 4, textAlign: 'center', borderWidth: 1, borderColor: theme.border,
     },
     searchBtn: {
-        backgroundColor: theme.accent,
-        borderRadius: 12,
-        paddingHorizontal: 20,
-        paddingVertical: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
+        backgroundColor: theme.accent, borderRadius: 12, paddingHorizontal: 20,
+        paddingVertical: 12, alignItems: 'center', justifyContent: 'center',
     },
-    searchBtnText: {
-        color: '#fff',
-        fontWeight: '900',
-        fontSize: 14,
-        letterSpacing: 1,
-    },
+    searchBtnText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
     list: { padding: 16, paddingBottom: 100 },
     card: {
-        backgroundColor: theme.surface,
-        borderRadius: 16,
-        padding: 18,
-        marginBottom: 14,
-        borderWidth: 1,
-        borderColor: theme.border,
+        backgroundColor: theme.surface, borderRadius: 16, padding: 18,
+        marginBottom: 14, borderWidth: 1, borderColor: theme.border,
     },
     cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
     categoryBadge: {
-        backgroundColor: theme.accentSoft,
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        marginRight: 8,
+        backgroundColor: theme.accentSoft, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, marginRight: 8,
     },
     categoryText: { color: theme.accent, fontWeight: '700', fontSize: 12 },
-    stakeBadge: {
-        backgroundColor: theme.card,
-        borderRadius: 8,
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-    },
+    stakeBadge: { backgroundColor: theme.card, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
     stakeText: { color: theme.text, fontSize: 12, fontWeight: '600' },
     cardMeta: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 14 },
-    joinBtn: {
-        backgroundColor: theme.accent,
-        borderRadius: 12,
-        paddingVertical: 12,
-        alignItems: 'center',
-    },
+    joinBtn: { backgroundColor: theme.accent, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
     joinBtnDisabled: { opacity: 0.6 },
     joinBtnText: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: 1 },
     emptyState: { alignItems: 'center', paddingTop: 80 },
@@ -318,20 +251,10 @@ const makeStyles = (theme: any) => StyleSheet.create({
     emptyTitle: { color: theme.text, fontSize: 20, fontWeight: '700', marginBottom: 8 },
     emptySub: { color: theme.textSecondary, fontSize: 14 },
     fab: {
-        position: 'absolute',
-        bottom: 32,
-        right: 24,
-        width: 60,
-        height: 60,
-        borderRadius: 30,
-        backgroundColor: theme.accent,
-        alignItems: 'center',
-        justifyContent: 'center',
-        elevation: 8,
-        shadowColor: theme.accent,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.5,
-        shadowRadius: 8,
+        position: 'absolute', bottom: 32, right: 24, width: 60, height: 60,
+        borderRadius: 30, backgroundColor: theme.accent, alignItems: 'center',
+        justifyContent: 'center', elevation: 8, shadowColor: theme.accent,
+        shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8,
     },
     fabText: { color: '#fff', fontSize: 30, fontWeight: '300', lineHeight: 34 },
 })

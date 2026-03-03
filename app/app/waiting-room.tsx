@@ -3,22 +3,19 @@ import {
     View, Text, StyleSheet, TouchableOpacity,
     ActivityIndicator, Clipboard, Animated
 } from 'react-native'
-import { supabase } from '../lib/supabase'
-import { startMatch } from '../lib/api'
-import { Session } from '@supabase/supabase-js'
-import { useTheme } from '../context/ThemeContext'
-import { Match, MatchQuestion } from '../types/game'
+import { useRouter } from 'expo-router'
+import { supabase } from '@/src/lib/supabase'
+import { startMatch } from '@/src/lib/api'
+import { useTheme } from '@/src/context/ThemeContext'
+import { Match, MatchQuestion } from '@/src/types/game'
+import { useSession } from '@/src/hooks/useSession'
+import { useGameStore } from '@/src/stores/useGameStore'
 
-type Props = {
-    session: Session
-    matchId: string
-    isPlayer1: boolean
-    onNavigate: (screen: string, params?: any) => void
-    onBack: () => void
-}
-
-export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, onBack }: Props) {
+export default function WaitingRoomScreen() {
     const { theme } = useTheme()
+    const { session } = useSession()
+    const router = useRouter()
+    const { matchId, isPlayer1, setGameData } = useGameStore()
     const [match, setMatch] = useState<Match | null>(null)
     const [starting, setStarting] = useState(false)
     const dotAnim = useRef(new Animated.Value(0)).current
@@ -36,21 +33,18 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
         const { data: questions } = await supabase
             .from('match_questions')
             .select('id, question_index, question_text, options')
-            .eq('match_id', matchId)
+            .eq('match_id', matchId!)
             .order('question_index', { ascending: true })
-        onNavigate('game', { matchId, questions, match: matchRow })
+        setGameData(questions as MatchQuestion[], matchRow)
+        router.push('/game')
     }
 
     useEffect(() => {
-        supabase
-            .from('matches')
-            .select('*')
-            .eq('id', matchId)
-            .single()
+        if (!matchId) return
+        supabase.from('matches').select('*').eq('id', matchId).single()
             .then(({ data }) => {
                 if (data) {
                     setMatch(data as Match)
-                    // If navigating to an already-starting/active match
                     if (data.status === 'starting' || data.status === 'active') {
                         navigateToGame(data as Match)
                     }
@@ -59,20 +53,20 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
 
         const channel = supabase
             .channel(`waiting-${matchId}`)
-            .on('postgres_changes', {
-                event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}`
-            }, async ({ new: updated }) => {
-                const m = updated as Match
-                setMatch(m)
-                if (m.status === 'starting' || m.status === 'active') {
-                    navigateToGame(m)
-                }
-            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` },
+                async ({ new: updated }) => {
+                    const m = updated as Match
+                    setMatch(m)
+                    if (m.status === 'starting' || m.status === 'active') {
+                        navigateToGame(m)
+                    }
+                })
             .subscribe()
         return () => { supabase.removeChannel(channel) }
     }, [matchId])
 
     const handleStart = async () => {
+        if (!session || !matchId) return
         setStarting(true)
         const res = await startMatch(session.access_token, matchId)
         if (res.status !== 'SUCCESS') setStarting(false)
@@ -84,7 +78,7 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
     return (
         <View style={s.container}>
             <View style={s.topBar}>
-                <TouchableOpacity onPress={onBack} style={s.backBtn}>
+                <TouchableOpacity onPress={() => router.replace('/(tabs)')} style={s.backBtn}>
                     <Text style={s.backText}>← Leave</Text>
                 </TouchableOpacity>
                 <Text style={s.topBarTitle}>Waiting Room</Text>
@@ -94,8 +88,8 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
             <View style={s.body}>
                 <View style={s.idCard}>
                     <Text style={s.idLabel}>MATCH CODE</Text>
-                    <TouchableOpacity onPress={() => Clipboard.setString(match?.match_code ?? matchId)}>
-                        <Text style={s.idValue}>{match?.match_code ?? matchId.slice(0, 8).toUpperCase()}</Text>
+                    <TouchableOpacity onPress={() => Clipboard.setString(match?.match_code ?? matchId ?? '')}>
+                        <Text style={s.idValue}>{match?.match_code ?? matchId?.slice(0, 8).toUpperCase()}</Text>
                         <Text style={s.idHint}>Tap to copy — share with a friend!</Text>
                     </TouchableOpacity>
                 </View>
@@ -104,12 +98,10 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
                     <Animated.Text style={[s.bigIcon, { opacity: isReady ? 1 : dotAnim }]}>
                         {isReady ? '🎮' : '⏳'}
                     </Animated.Text>
-                    <Text style={s.statusTitle}>
-                        {isReady ? 'Opponent Joined!' : 'Waiting for opponent…'}
-                    </Text>
+                    <Text style={s.statusTitle}>{isReady ? 'Opponent Joined!' : 'Waiting for opponent…'}</Text>
                     <Text style={s.statusSub}>
                         {isPlayer1
-                            ? isReady ? 'You can now start the match' : 'Share the Match ID with a friend'
+                            ? isReady ? 'You can now start the match' : 'Share the Match Code with a friend'
                             : 'Waiting for Player 1 to start…'
                         }
                     </Text>
@@ -142,19 +134,12 @@ export default function WaitingRoom({ session, matchId, isPlayer1, onNavigate, o
 
 const makeStyles = (theme: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.bg },
-    topBar: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-        paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20,
-        backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border,
-    },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
     backBtn: { width: 60 },
     backText: { color: theme.danger, fontSize: 15, fontWeight: '600' },
     topBarTitle: { fontSize: 17, fontWeight: '800', color: theme.text },
     body: { flex: 1, padding: 24, alignItems: 'center', justifyContent: 'center' },
-    idCard: {
-        backgroundColor: theme.surface, borderRadius: 16, padding: 20, alignItems: 'center',
-        borderWidth: 1, borderColor: theme.border, marginBottom: 40, width: '100%',
-    },
+    idCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: theme.border, marginBottom: 40, width: '100%' },
     idLabel: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 2, marginBottom: 8 },
     idValue: { fontSize: 28, fontWeight: '900', color: theme.accent, letterSpacing: 4, textAlign: 'center' },
     idHint: { color: theme.textSecondary, fontSize: 12, textAlign: 'center', marginTop: 6 },
@@ -162,18 +147,11 @@ const makeStyles = (theme: any) => StyleSheet.create({
     bigIcon: { fontSize: 64, marginBottom: 16 },
     statusTitle: { fontSize: 22, fontWeight: '800', color: theme.text, textAlign: 'center', marginBottom: 8 },
     statusSub: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20 },
-    playersRow: {
-        flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-        marginBottom: 40, gap: 20,
-    },
+    playersRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 40, gap: 20 },
     playerSlot: { alignItems: 'center', gap: 8 },
     playerDot: { width: 14, height: 14, borderRadius: 7 },
     playerLabel: { color: theme.textSecondary, fontWeight: '700', fontSize: 12, letterSpacing: 1 },
     vs: { fontSize: 18, fontWeight: '900', color: theme.accent },
-    startBtn: {
-        backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 18, paddingHorizontal: 40,
-        alignItems: 'center', shadowColor: theme.accent,
-        shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10,
-    },
+    startBtn: { backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 18, paddingHorizontal: 40, alignItems: 'center', shadowColor: theme.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 10 },
     startBtnText: { color: '#fff', fontWeight: '900', fontSize: 16, letterSpacing: 1.5 },
 })
