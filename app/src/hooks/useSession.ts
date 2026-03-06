@@ -4,7 +4,6 @@ import { supabase } from '../lib/supabase'
 
 /**
  * Hook that reactively provides the current Supabase session.
- * Use this in any screen that previously received `session` as a prop.
  */
 export function useSession() {
     const [session, setSession] = useState<Session | null>(null)

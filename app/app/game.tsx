@@ -3,12 +3,12 @@ import {
     View, Text, StyleSheet, TouchableOpacity, Animated, ScrollView
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '@/src/lib/supabase'
-import { submitAnswer } from '@/src/lib/api'
-import { useTheme } from '@/src/context/ThemeContext'
-import { Match } from '@/src/types/game'
-import { useSession } from '@/src/hooks/useSession'
-import { useGameStore } from '@/src/stores/useGameStore'
+import { supabase } from '../src/lib/supabase'
+import { submitAnswer } from '../src/lib/api'
+import { useTheme } from '../src/context/ThemeContext'
+import { Match } from '../src/types/game'
+import { useSession } from '../src/hooks/useSession'
+import { useGameStore } from '../src/stores/useGameStore'
 
 const PRE_GAME_SECONDS = 5
 const INTER_Q_SECONDS = 3
@@ -41,7 +41,6 @@ export default function GameScreen() {
     const [questionPhaseStart, setQuestionPhaseStart] = useState<number | null>(
         initialMatch?.status !== 'starting' ? Date.now() : null
     )
-    const [tipIndex] = useState(() => Math.floor(Math.random() * TIPS.length))
 
     const countdownScale = useRef(new Animated.Value(1)).current
     const modalOpacity = useRef(new Animated.Value(0)).current

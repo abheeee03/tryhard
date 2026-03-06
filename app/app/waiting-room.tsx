@@ -4,12 +4,12 @@ import {
     ActivityIndicator, Clipboard, Animated
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '@/src/lib/supabase'
-import { startMatch } from '@/src/lib/api'
-import { useTheme } from '@/src/context/ThemeContext'
-import { Match, MatchQuestion } from '@/src/types/game'
-import { useSession } from '@/src/hooks/useSession'
-import { useGameStore } from '@/src/stores/useGameStore'
+import { supabase } from '../src/lib/supabase'
+import { startMatch } from '../src/lib/api'
+import { useTheme } from '../src/context/ThemeContext'
+import { Match, MatchQuestion } from '../src/types/game'
+import { useSession } from '../src/hooks/useSession'
+import { useGameStore } from '../src/stores/useGameStore'
 
 export default function WaitingRoomScreen() {
     const { theme } = useTheme()

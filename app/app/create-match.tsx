@@ -4,10 +4,10 @@ import {
     ScrollView, ActivityIndicator, Alert, Animated
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { createMatch } from '@/src/lib/api'
-import { useTheme } from '@/src/context/ThemeContext'
-import { useSession } from '@/src/hooks/useSession'
-import { useGameStore } from '@/src/stores/useGameStore'
+import { createMatch } from '../src/lib/api'
+import { useTheme } from '../src/context/ThemeContext'
+import { useSession } from '../src/hooks/useSession'
+import { useGameStore } from '../src/stores/useGameStore'
 
 type PickerOption = { label: string; value: any }
 

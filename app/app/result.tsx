@@ -3,10 +3,10 @@ import {
     View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Animated
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { supabase } from '@/src/lib/supabase'
-import { useTheme } from '@/src/context/ThemeContext'
-import { useSession } from '@/src/hooks/useSession'
-import { useGameStore } from '@/src/stores/useGameStore'
+import { supabase } from '../src/lib/supabase'
+import { useTheme } from '../src/context/ThemeContext'
+import { useSession } from '../src/hooks/useSession'
+import { useGameStore } from '../src/stores/useGameStore'
 
 export default function ResultScreen() {
     const { theme } = useTheme()
