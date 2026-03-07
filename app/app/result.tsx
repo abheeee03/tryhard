@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
-    View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Animated
+    View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Animated, Clipboard, Alert
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { supabase } from '../src/lib/supabase'
@@ -60,6 +60,10 @@ export default function ResultScreen() {
     const resultTitle = isDraw ? "It's a Draw!" : isWinner ? 'You Won!' : 'You Lost'
     const resultColor = isDraw ? theme.warning : isWinner ? theme.success : theme.danger
 
+    const isStaked = matchData?.stake_amount > 0
+    const stakeAmount = matchData?.stake_amount ?? 0
+    const payoutTx = matchData?.payout_tx
+
     if (loading) return (
         <View style={[s.container, s.center]}><ActivityIndicator size="large" color={theme.accent} /></View>
     )
@@ -81,6 +85,40 @@ export default function ResultScreen() {
                     <Text style={s.scoreLabel}>OPPONENT</Text>
                 </View>
             </View>
+
+            {/* Payout section for staked matches */}
+            {isStaked && (
+                <View style={s.payoutCard}>
+                    <Text style={s.payoutTitle}>
+                        {isDraw ? '🔄 REFUND' : isWinner ? '💰 PAYOUT' : '💸 STAKE LOST'}
+                    </Text>
+                    <Text style={[s.payoutAmount, { color: isDraw ? theme.warning : isWinner ? '#14F195' : theme.danger }]}>
+                        {isDraw
+                            ? `${stakeAmount} SOL refunded`
+                            : isWinner
+                                ? `+${(stakeAmount * 2).toFixed(4)} SOL`
+                                : `-${stakeAmount} SOL`
+                        }
+                    </Text>
+                    {payoutTx && (
+                        <TouchableOpacity
+                            onPress={() => {
+                                Clipboard.setString(payoutTx)
+                                Alert.alert('Copied', 'Transaction signature copied to clipboard')
+                            }}
+                        >
+                            <Text style={s.payoutTx}>
+                                TX: {payoutTx.slice(0, 8)}…{payoutTx.slice(-8)}
+                            </Text>
+                            <Text style={s.tapHint}>Tap to copy</Text>
+                        </TouchableOpacity>
+                    )}
+                    {!payoutTx && (
+                        <Text style={s.payoutPending}>⏳ Payout processing…</Text>
+                    )}
+                </View>
+            )}
+
             <Text style={s.sectionTitle}>BREAKDOWN</Text>
             {breakdown.map((item, i) => (
                 <View key={i} style={s.breakdownRow}>
@@ -104,11 +142,17 @@ const makeStyles = (theme: any) => StyleSheet.create({
     hero: { alignItems: 'center', marginBottom: 32 },
     heroEmoji: { fontSize: 72, marginBottom: 12 },
     heroTitle: { fontSize: 34, fontWeight: '900', letterSpacing: 1 },
-    scoreCard: { flexDirection: 'row', backgroundColor: theme.surface, borderRadius: 20, borderWidth: 1, borderColor: theme.border, marginBottom: 32, overflow: 'hidden' },
+    scoreCard: { flexDirection: 'row', backgroundColor: theme.surface, borderRadius: 20, borderWidth: 1, borderColor: theme.border, marginBottom: 24, overflow: 'hidden' },
     scoreCol: { flex: 1, alignItems: 'center', paddingVertical: 24 },
     scoreNum: { fontSize: 48, fontWeight: '900' },
     scoreLabel: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 2, marginTop: 4 },
     scoreDivider: { width: 1, backgroundColor: theme.border },
+    payoutCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 20, alignItems: 'center', borderWidth: 1, borderColor: theme.border, marginBottom: 24 },
+    payoutTitle: { fontSize: 12, fontWeight: '800', color: theme.textSecondary, letterSpacing: 2, marginBottom: 8 },
+    payoutAmount: { fontSize: 28, fontWeight: '900', marginBottom: 8 },
+    payoutTx: { color: theme.accent, fontSize: 13, fontWeight: '600', fontFamily: 'monospace', textAlign: 'center' },
+    tapHint: { color: theme.textSecondary, fontSize: 11, textAlign: 'center', marginTop: 4 },
+    payoutPending: { color: theme.textSecondary, fontSize: 13 },
     sectionTitle: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 2, marginBottom: 12 },
     breakdownRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.surface, borderRadius: 12, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: theme.border },
     breakdownIcon: { fontSize: 18 },

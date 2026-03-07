@@ -10,34 +10,33 @@ import {
   SystemProgram,
   LAMPORTS_PER_SOL,
   clusterApiUrl,
+  SendTransactionError,
+  BlockhashNotFoundError,
 } from "@solana/web3.js";
 import { useWalletStore } from "../stores/wallet-store";
 
 const APP_IDENTITY = {
-  name: "SolScan",
-  uri: "https://solscan.io",
+  name: "TryHard",
+  uri: "https://tryhard.app",
   icon: "favicon.ico",
 };
 
+const MAX_RETRIES = 2;
+
 export function useWallet() {
-  const [publicKey, setPublicKey] = useState<PublicKey | null>(null);
+  const { isDevnet, publicKeyBase58, setPublicKeyBase58 } = useWalletStore();
+  const publicKey = publicKeyBase58 ? new PublicKey(publicKeyBase58) : null;
   const [connecting, setConnecting] = useState(false);
   const [sending, setSending] = useState(false);
-  const isDevnet = useWalletStore((s) => s.isDevnet);
 
   const cluster = isDevnet ? "devnet" : "mainnet-beta";
   const connection = new Connection(clusterApiUrl(cluster), "confirmed");
 
-  // ============================================
-  // CONNECT — Ask Phantom to authorize our app
-  // ============================================
   const connect = useCallback(async () => {
     setConnecting(true);
     try {
       const authResult = await transact(
         async (wallet: Web3MobileWallet) => {
-          // This opens Phantom, shows an "Authorize" dialog
-          // User taps "Approve" → we get their public key
           const result = await wallet.authorize({
             chain: `solana:${cluster}`,
             identity: APP_IDENTITY,
@@ -46,46 +45,158 @@ export function useWallet() {
         }
       );
 
-      // authResult.accounts[0].address is a base64 public key
       const pubkey = new PublicKey(
         Buffer.from(authResult.accounts[0].address, "base64")
       );
-      setPublicKey(pubkey);
+      setPublicKeyBase58(pubkey.toBase58());
+      console.log(`[wallet] Connected: ${pubkey.toBase58()}`);
       return pubkey;
-    } catch (error: any) {
-      console.error("Connect failed:", error);
+    } catch (error: unknown) {
+      console.error("[wallet] Connect failed:", error);
       throw error;
     } finally {
       setConnecting(false);
     }
-  }, [cluster]);
+  }, [cluster, setPublicKeyBase58]);
 
-  // ============================================
-  // DISCONNECT
-  // ============================================
   const disconnect = useCallback(() => {
-    setPublicKey(null);
-  }, []);
+    console.log("[wallet] Disconnected");
+    setPublicKeyBase58(null);
+  }, [setPublicKeyBase58]);
 
-  // ============================================
-  // GET BALANCE
-  // ============================================
-  const getBalance = useCallback(async () => {
+  const getBalance = useCallback(async (): Promise<number> => {
     if (!publicKey) return 0;
     const balance = await connection.getBalance(publicKey);
     return balance / LAMPORTS_PER_SOL;
   }, [publicKey, connection]);
 
-  // ============================================
-  // SEND SOL — Build, sign, and send a transaction
-  // ============================================
+  const signAndSendTransaction = useCallback(
+    async (transaction: Transaction): Promise<string> => {
+      if (!publicKey) throw new Error("Wallet not connected");
+
+      setSending(true);
+      console.log("[wallet] Signing and sending transaction…");
+
+      let lastError: Error | null = null;
+
+      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        try {
+          const { blockhash, lastValidBlockHeight } =
+            await connection.getLatestBlockhash("confirmed");
+
+          transaction.recentBlockhash = blockhash;
+          transaction.feePayer = publicKey;
+
+          const signedTransactions = await transact(
+            async (wallet: Web3MobileWallet) => {
+              await wallet.authorize({
+                chain: `solana:${cluster}`,
+                identity: APP_IDENTITY,
+              });
+
+              return await wallet.signTransactions({
+                transactions: [transaction],
+              });
+            }
+          );
+
+          if (!signedTransactions || signedTransactions.length === 0) {
+            throw new Error("User canceled signing or no transaction signed");
+          }
+
+          const signedTx = signedTransactions[0];
+
+          console.log("[wallet] Dispatching raw transaction to network...");
+          const txSignature = await connection.sendRawTransaction(
+            signedTx.serialize(),
+            {
+              skipPreflight: false,
+            }
+          );
+
+          console.log(`[wallet] Requesting confirmation for: ${txSignature}`);
+          const confirmation = await connection.confirmTransaction(
+            {
+              signature: txSignature,
+              blockhash,
+              lastValidBlockHeight,
+            },
+            "confirmed"
+          );
+
+          if (confirmation.value.err) {
+            throw new Error(
+              `Transaction failed: ${JSON.stringify(confirmation.value.err)}`
+            );
+          }
+
+          console.log(
+            `[wallet] ✅ Transaction sent and confirmed: ${txSignature}`
+          );
+          return txSignature;
+        } catch (error: unknown) {
+          lastError = error instanceof Error ? error : new Error(String(error));
+          console.error(`[wallet] Attempt ${attempt + 1} failed:`, lastError.message);
+
+          const errorMessage = lastError.message;
+
+          if (
+            error instanceof BlockhashNotFoundError ||
+            errorMessage.includes("Blockhash not found") ||
+            errorMessage.includes("blockhash not found")
+          ) {
+            console.log(
+              `[wallet] Blockhash expired, retrying with fresh blockhash (attempt ${
+                attempt + 1
+              }/${MAX_RETRIES + 1})...`
+            );
+            continue;
+          }
+
+          if (error instanceof SendTransactionError) {
+            try {
+              const logs = await error.getLogs();
+              if (logs && logs.length > 0) {
+                console.error("[wallet] Transaction logs:", logs);
+              }
+            } catch {
+              // Ignore log retrieval errors
+            }
+
+            if (error.transactionMessage) {
+              console.error("[wallet] Transaction message:", error.transactionMessage);
+            }
+          }
+
+          if (errorMessage.includes("Program") && errorMessage.includes("does not exist")) {
+            throw new Error(
+              "The escrow program is not deployed to the network. Please deploy the program first."
+            );
+          }
+          if (errorMessage.includes("insufficient funds")) {
+            throw new Error(
+              "Insufficient SOL balance for this transaction. Please add more SOL to your wallet."
+            );
+          }
+          if (errorMessage.includes("User canceled") || errorMessage.includes("cancel")) {
+            throw new Error("Transaction was cancelled by user.");
+          }
+
+          throw lastError;
+        }
+      }
+
+      throw lastError || new Error("Transaction failed after retries");
+    },
+    [publicKey, connection, cluster]
+  );
+
   const sendSOL = useCallback(
-    async (toAddress: string, amountSOL: number) => {
+    async (toAddress: string, amountSOL: number): Promise<string> => {
       if (!publicKey) throw new Error("Wallet not connected");
 
       setSending(true);
       try {
-        // Step 1: Build the transaction
         const toPublicKey = new PublicKey(toAddress);
         const transaction = new Transaction().add(
           SystemProgram.transfer({
@@ -95,31 +206,68 @@ export function useWallet() {
           })
         );
 
-        // Step 2: Get recent blockhash (needed for transaction)
-        const { blockhash } = await connection.getLatestBlockhash();
+        const { blockhash, lastValidBlockHeight } =
+          await connection.getLatestBlockhash("confirmed");
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = publicKey;
 
-        // Step 3: Send to Phantom for signing + submission
-        const txSignature = await transact(
+        const signedTransactions = await transact(
           async (wallet: Web3MobileWallet) => {
-            // Re-authorize (Phantom needs this each session)
             await wallet.authorize({
               chain: `solana:${cluster}`,
               identity: APP_IDENTITY,
             });
 
-            // Sign and send — Phantom shows the transaction details
-            // User approves → Phantom signs → sends to network
-            const signatures = await wallet.signAndSendTransactions({
+            return await wallet.signTransactions({
               transactions: [transaction],
             });
-
-            return signatures[0];
           }
         );
 
+        if (!signedTransactions || signedTransactions.length === 0) {
+          throw new Error("User canceled signing or no transaction signed");
+        }
+
+        const signedTx = signedTransactions[0];
+        const txSignature = await connection.sendRawTransaction(
+          signedTx.serialize(),
+          {
+            skipPreflight: false,
+          }
+        );
+
+        const confirmation = await connection.confirmTransaction(
+          {
+            signature: txSignature,
+            blockhash,
+            lastValidBlockHeight,
+          },
+          "confirmed"
+        );
+
+        if (confirmation.value.err) {
+          throw new Error(
+            `Transaction failed: ${JSON.stringify(confirmation.value.err)}`
+          );
+        }
+
         return txSignature;
+      } catch (error: unknown) {
+        if (error instanceof Error) {
+          const errorMessage = error.message;
+          if (
+            errorMessage.includes("insufficient funds") ||
+            errorMessage.includes("Insufficient")
+          ) {
+            throw new Error(
+              "Insufficient SOL balance. Please add more SOL to your wallet."
+            );
+          }
+          if (errorMessage.includes("User canceled") || errorMessage.includes("cancel")) {
+            throw new Error("Transaction was cancelled by user.");
+          }
+        }
+        throw error;
       } finally {
         setSending(false);
       }
@@ -136,6 +284,7 @@ export function useWallet() {
     disconnect,
     getBalance,
     sendSOL,
+    signAndSendTransaction,
     connection,
   };
 }

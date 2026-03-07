@@ -5,6 +5,9 @@ package_manager = "yarn"
 resolution = true
 skip-lint = false
 
+[programs.devnet]
+pvp_escrow = "AystLWreZ41EQzWgkTXTRYGn83qiQoxZqiLaBAdn4iFA"
+
 [programs.localnet]
 pvp_escrow = "AystLWreZ41EQzWgkTXTRYGn83qiQoxZqiLaBAdn4iFA"
 
@@ -12,7 +15,7 @@ pvp_escrow = "AystLWreZ41EQzWgkTXTRYGn83qiQoxZqiLaBAdn4iFA"
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]

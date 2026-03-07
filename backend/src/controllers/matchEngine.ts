@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase";
+import { matchIdToGameId, resolveEscrow, drawEscrow } from "../utils/solana";
 
 const PRE_GAME_COUNTDOWN_SECONDS = 5;
 const INTER_QUESTION_BUFFER_SECONDS = 3; // Must match client-side INTER_Q_SECONDS
@@ -104,6 +105,34 @@ const finishMatch = async (matchId: string) => {
 
     console.log(`[finishMatch] Match ${matchId} marked finished. Winner: ${winner_id ?? "draw"}`);
 
+    // ─── Escrow resolution ─────────────────────────────────────
+    if (match.stake_amount > 0 && match.player1_wallet && match.player2_wallet) {
+        const gameId = matchIdToGameId(matchId);
+        try {
+            let payoutTx: string;
+            if (winner_id) {
+                const winnerWallet = winner_id === match.player1_id
+                    ? match.player1_wallet
+                    : match.player2_wallet;
+                console.log(`[payment] Resolving escrow: game=${gameId}, winner=${winnerWallet}`);
+                payoutTx = await resolveEscrow(gameId, winnerWallet);
+            } else {
+                console.log(`[payment] Drawing escrow: game=${gameId}`);
+                payoutTx = await drawEscrow(gameId, match.player1_wallet, match.player2_wallet);
+            }
+
+            await supabase
+                .from("matches")
+                .update({ payout_tx: payoutTx })
+                .eq("id", matchId);
+
+            console.log(`[payment] ✅ Escrow resolved for match=${matchId}, tx=${payoutTx}`);
+        } catch (escrowErr) {
+            console.error(`[payment] ⚠ Escrow resolution FAILED for match=${matchId}:`, escrowErr);
+        }
+    }
+
+    // ─── Stats updates ─────────────────────────────────────────
     const statsUpdates: Promise<any>[] = [];
 
     if (winner_id) {

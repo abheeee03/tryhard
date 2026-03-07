@@ -9,26 +9,31 @@ function generateMatchCode(): string {
 }
 
 export const createMatch = async (req: Request, res: Response) => {
-    const { time_per_que, category, total_questions, stake_amount, difficulty } = req.body;
+    const { time_per_que, category, total_questions, stake_amount, difficulty, player1_wallet } = req.body;
     const { userID } = req;
     try {
         const matchCode = generateMatchCode();
+        console.log(`[match] Creating match: user=${userID}, category=${category}, stake=${stake_amount}, wallet=${player1_wallet ?? 'none'}`);
+
         const { data, error } = await supabase.from('matches').insert({
             player1_id: userID,
             question_duration_seconds: time_per_que,
             total_questions,
             category,
             stake_amount,
-            match_code: matchCode
+            match_code: matchCode,
+            player1_wallet: player1_wallet ?? null,
         }).select().single()
         if (error || !data) {
-            console.log("Error while creating room: ", error);
+            console.log("[match] Error while creating room: ", error);
 
             return res.status(500).json({
                 status: "FAILED",
                 error: "Failed to Create Room"
             })
         }
+
+        console.log(`[match] ✅ Match created: id=${data.id}, code=${matchCode}, stake=${stake_amount}`);
 
         const generatedQuestions: { questions: Question[] } = await generateQuestions(category, total_questions, difficulty);
 
@@ -43,7 +48,7 @@ export const createMatch = async (req: Request, res: Response) => {
             })))
 
         if (match_questions_error) {
-            console.log("Error while creating questions: ", match_questions_error);
+            console.log("[match] Error while creating questions: ", match_questions_error);
 
             return res.status(500).json({
                 status: "FAILED",
@@ -59,6 +64,7 @@ export const createMatch = async (req: Request, res: Response) => {
             status: "SUCCESS"
         })
     } catch (err) {
+        console.error("[match] Error creating match:", err);
         return res.status(500).json({
             status: "FAILED",
             error: "Internal Server Error"
@@ -70,6 +76,9 @@ export const createMatch = async (req: Request, res: Response) => {
 export const joinMatch = async (req: Request, res: Response) => {
     const matchID = req.params.id;
     const { userID } = req;
+    const { player2_wallet } = req.body;
+
+    console.log(`[match] Join attempt: match=${matchID}, user=${userID}, wallet=${player2_wallet ?? 'none'}`);
 
     const { data: matchData, error: matchErr } = await supabase
         .from("matches")
@@ -101,20 +110,20 @@ export const joinMatch = async (req: Request, res: Response) => {
         .from("matches")
         .update({
             player2_id: userID,
+            player2_wallet: player2_wallet ?? null,
             status: "ready"
         })
         .eq("id", matchID)
 
-
-    console.log("update error: ", updateMatchErr);
-
-
     if (updateMatchErr) {
+        console.log("[match] Error joining: ", updateMatchErr);
         return res.json({
             status: "FAILED",
             error: "Failed to join room"
         })
     }
+
+    console.log(`[match] ✅ Player2 joined match=${matchID}, wallet=${player2_wallet ?? 'none'}`);
 
     return res.json({
         status: "SUCCESS",
@@ -122,7 +131,6 @@ export const joinMatch = async (req: Request, res: Response) => {
             message: "JOINED ROOM"
         }
     })
-
 }
 
 

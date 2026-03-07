@@ -1,0 +1,376 @@
+{
+  "address": "AystLWreZ41EQzWgkTXTRYGn83qiQoxZqiLaBAdn4iFA",
+  "metadata": {
+    "name": "pvp_escrow",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Created with Anchor"
+  },
+  "instructions": [
+    {
+      "name": "cancel",
+      "discriminator": [
+        232,
+        219,
+        223,
+        41,
+        219,
+        236,
+        220,
+        190
+      ],
+      "accounts": [
+        {
+          "name": "player1",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "_game_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "draw",
+      "discriminator": [
+        61,
+        40,
+        62,
+        184,
+        31,
+        176,
+        24,
+        130
+      ],
+      "accounts": [
+        {
+          "name": "backend_auth",
+          "signer": true,
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "player1",
+          "writable": true
+        },
+        {
+          "name": "player2",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "_game_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "player1",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "game_id",
+          "type": "string"
+        },
+        {
+          "name": "bet_amount",
+          "type": "u64"
+        },
+        {
+          "name": "backend_auth",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "join",
+      "discriminator": [
+        206,
+        55,
+        2,
+        106,
+        113,
+        220,
+        17,
+        163
+      ],
+      "accounts": [
+        {
+          "name": "player2",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "_game_id",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "resolve",
+      "discriminator": [
+        246,
+        150,
+        236,
+        206,
+        108,
+        63,
+        58,
+        10
+      ],
+      "accounts": [
+        {
+          "name": "backend_auth",
+          "signer": true,
+          "relations": [
+            "escrow"
+          ]
+        },
+        {
+          "name": "winner",
+          "writable": true
+        },
+        {
+          "name": "escrow",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  101,
+                  115,
+                  99,
+                  114,
+                  111,
+                  119
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "game_id"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "_game_id",
+          "type": "string"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "GameEscrow",
+      "discriminator": [
+        37,
+        195,
+        2,
+        234,
+        81,
+        128,
+        248,
+        133
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "GameIdTooLong",
+      "msg": "Game ID cannot be longer than 32 characters."
+    },
+    {
+      "code": 6001,
+      "name": "GameAlreadyJoined",
+      "msg": "Game has already been joined by another player."
+    },
+    {
+      "code": 6002,
+      "name": "GameNotJoined",
+      "msg": "Game has not been joined by a second player yet."
+    },
+    {
+      "code": 6003,
+      "name": "InvalidWinner",
+      "msg": "The provided winner is neither player 1 nor player 2."
+    },
+    {
+      "code": 6004,
+      "name": "InvalidPlayer1",
+      "msg": "Invalid player 1 account."
+    },
+    {
+      "code": 6005,
+      "name": "InvalidPlayer2",
+      "msg": "Invalid player 2 account."
+    }
+  ],
+  "types": [
+    {
+      "name": "GameEscrow",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player1",
+            "type": "pubkey"
+          },
+          {
+            "name": "player2",
+            "type": "pubkey"
+          },
+          {
+            "name": "bet_amount",
+            "type": "u64"
+          },
+          {
+            "name": "game_id",
+            "type": "string"
+          },
+          {
+            "name": "backend_auth",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_joined",
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

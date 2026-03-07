@@ -4,10 +4,19 @@ import {
     ScrollView, ActivityIndicator, Alert, Animated
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { createMatch } from '../src/lib/api'
+import { createMatch, confirmDeposit } from '../src/lib/api'
 import { useTheme } from '../src/context/ThemeContext'
 import { useSession } from '../src/hooks/useSession'
 import { useGameStore } from '../src/stores/useGameStore'
+import { ConnectButton } from '../src/components/ConnectButton'
+import { useWallet } from '../src/hooks/useWallet'
+import { buildInitializeEscrowTx, matchIdToGameId, solToLamports } from '../src/lib/escrow'
+import { PublicKey } from '@solana/web3.js'
+
+// Backend authority pubkey — must match BACKEND_WALLET_SECRET on the server
+const BACKEND_AUTH_PUBKEY = new PublicKey(
+    process.env.EXPO_PUBLIC_BACKEND_AUTH_PUBKEY ?? '11111111111111111111111111111111'
+)
 
 type PickerOption = { label: string; value: any }
 
@@ -45,6 +54,7 @@ export default function CreateMatchScreen() {
     const { theme } = useTheme()
     const { session } = useSession()
     const router = useRouter()
+    const wallet = useWallet()
     const setMatchId = useGameStore((s) => s.setMatchId)
     const [category, setCategory] = useState('')
     const [timePerQ, setTimePerQ] = useState(5)
@@ -52,25 +62,95 @@ export default function CreateMatchScreen() {
     const [difficulty, setDifficulty] = useState('easy')
     const [stake, setStake] = useState('0')
     const [loading, setLoading] = useState(false)
+    const [status, setStatus] = useState<string | null>(null)
     const btnScale = useRef(new Animated.Value(1)).current
 
     const handleCreate = async () => {
         if (!session) return
         if (!category.trim()) { Alert.alert('Enter a category'); return }
+
+        const stakeAmount = parseFloat(stake) || 0
+
+        // If stake > 0, wallet must be connected
+        if (stakeAmount > 0 && !wallet.connected) {
+            Alert.alert(
+                'Wallet Required',
+                'Connect your Solana wallet from the Profile tab to create a staked match.',
+                [{ text: 'OK' }]
+            )
+            return
+        }
+
         setLoading(true)
-        const res = await createMatch(session.access_token, {
-            time_per_que: timePerQ,
-            category: category.trim(),
-            total_questions: totalQ,
-            stake_amount: parseFloat(stake) || 0,
-            difficulty,
-        })
-        setLoading(false)
-        if (res.status === 'SUCCESS') {
-            setMatchId(res.data.match.id, true)
+
+        try {
+            // Step 1: Create match on backend
+            setStatus('Creating match…')
+            console.log('[create-match] Creating match…')
+            const res = await createMatch(session.access_token, {
+                time_per_que: timePerQ,
+                category: category.trim(),
+                total_questions: totalQ,
+                stake_amount: stakeAmount,
+                difficulty,
+                player1_wallet: wallet.publicKey?.toBase58() ?? null,
+            })
+
+            if (res.status !== 'SUCCESS') {
+                Alert.alert('Error', res.error ?? 'Failed to create match')
+                setLoading(false)
+                setStatus(null)
+                return
+            }
+
+            const matchId = res.data.match.id
+            console.log(`[create-match] Match created: ${matchId}`)
+
+            // Step 2: If staked, deposit to escrow
+            if (stakeAmount > 0 && wallet.publicKey) {
+                setStatus('Depositing to escrow…')
+                console.log(`[create-match] Building escrow initialize tx for ${stakeAmount} SOL…`)
+
+                const gameId = matchIdToGameId(matchId)
+                const tx = buildInitializeEscrowTx(
+                    wallet.publicKey,
+                    gameId,
+                    solToLamports(stakeAmount),
+                    BACKEND_AUTH_PUBKEY
+                )
+
+            const txSig = await wallet.signAndSendTransaction(tx)
+                console.log(`[create-match] ✅ Escrow deposit tx: ${txSig}`)
+
+                // Step 3: Confirm deposit on backend
+                setStatus('Confirming deposit…')
+                await confirmDeposit(session.access_token, matchId, txSig, 'player1')
+                console.log(`[create-match] ✅ Deposit confirmed on backend`)
+            }
+
+            setMatchId(matchId, true)
             router.push('/waiting-room')
-        } else {
-            Alert.alert('Error', res.error ?? 'Failed to create match')
+        } catch (err: any) {
+            console.error('[create-match] Error:', err)
+            
+            // Provide more helpful error messages based on the error
+            const errorMsg = err?.message || String(err)
+            let userFriendlyMsg = 'Something went wrong'
+            
+            if (errorMsg.includes('Program') && errorMsg.includes('does not exist')) {
+                userFriendlyMsg = 'The game program is not deployed. Please contact support.'
+            } else if (errorMsg.includes('insufficient funds')) {
+                userFriendlyMsg = 'Insufficient SOL balance. Please add more SOL to your wallet.'
+            } else if (errorMsg.includes('User canceled')) {
+                userFriendlyMsg = 'Transaction was cancelled.'
+            } else if (errorMsg.includes('simulation failed')) {
+                userFriendlyMsg = 'Transaction simulation failed. Please try again.'
+            }
+            
+            Alert.alert('Error', userFriendlyMsg)
+        } finally {
+            setLoading(false)
+            setStatus(null)
         }
     }
 
@@ -99,9 +179,41 @@ export default function CreateMatchScreen() {
                 <Text style={s.sectionLabel}>DIFFICULTY</Text>
                 <SegmentedPicker options={DIFFICULTY_OPTIONS} value={difficulty} onChange={setDifficulty} theme={theme} />
 
-                <Text style={s.sectionLabel}>STAKE AMOUNT</Text>
+                <Text style={s.sectionLabel}>STAKE AMOUNT (SOL)</Text>
                 <TextInput style={s.input} value={stake} onChangeText={setStake}
                     keyboardType="numeric" placeholder="0" placeholderTextColor={theme.textSecondary} />
+
+                {parseFloat(stake) > 0 && !wallet.connected && (
+                    <View style={s.warningCard}>
+                        <Text style={s.warningText}>⚠ Connect your wallet to stake SOL</Text>
+                    </View>
+                )}
+
+                <Text style={s.sectionLabel}>SOLANA WALLET</Text>
+                <ConnectButton
+                    connected={wallet.connected}
+                    connecting={wallet.connecting}
+                    publicKey={wallet.publicKey?.toBase58() ?? null}
+                    onConnect={wallet.connect}
+                    onDisconnect={wallet.disconnect}
+                />
+
+
+
+                {parseFloat(stake) > 0 && wallet.connected && (
+                    <View style={s.infoCard}>
+                        <Text style={s.infoText}>
+                            💰 {parseFloat(stake)} SOL will be deposited to escrow on creation
+                        </Text>
+                    </View>
+                )}
+
+                {status && (
+                    <View style={s.statusCard}>
+                        <ActivityIndicator size="small" color={theme.accent} />
+                        <Text style={s.statusText}>{status}</Text>
+                    </View>
+                )}
 
                 <Animated.View style={{ transform: [{ scale: btnScale }] }}>
                     <TouchableOpacity style={[s.createBtn, loading && { opacity: 0.7 }]} onPress={handleCreate}
@@ -130,4 +242,10 @@ const makeStyles = (theme: any) => StyleSheet.create({
     input: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 14, color: theme.text, fontSize: 15 },
     createBtn: { backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 18, alignItems: 'center', marginTop: 8, shadowColor: theme.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
     createBtnText: { color: '#fff', fontWeight: '900', fontSize: 15, letterSpacing: 1.5 },
+    warningCard: { backgroundColor: 'rgba(255, 170, 0, 0.1)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(255, 170, 0, 0.3)' },
+    warningText: { color: '#FFAA00', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+    infoCard: { backgroundColor: 'rgba(20, 241, 149, 0.1)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(20, 241, 149, 0.3)' },
+    infoText: { color: '#14F195', fontSize: 13, fontWeight: '600', textAlign: 'center' },
+    statusCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: theme.border },
+    statusText: { color: theme.text, fontSize: 13, fontWeight: '600' },
 })

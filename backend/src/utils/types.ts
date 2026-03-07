@@ -30,6 +30,12 @@ export interface Match {
     created_at: Date;
     started_at: Date | null;
     finished_at: Date | null;
+    // Payment fields
+    player1_wallet: string | null;
+    player2_wallet: string | null;
+    player1_deposit_tx: string | null;
+    player2_deposit_tx: string | null;
+    payout_tx: string | null;
 }
 
 export interface MatchQuestion {
