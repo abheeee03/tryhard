@@ -18,7 +18,7 @@ export default function WaitingRoomScreen() {
     const { session } = useSession()
     const router = useRouter()
     const wallet = useWallet()
-    const { matchId, isPlayer1, setGameData } = useGameStore()
+    const { matchId, isPlayer1, setGameData, setMatch: storeSetMatch } = useGameStore()
     const [match, setMatch] = useState<Match | null>(null)
     const [starting, setStarting] = useState(false)
     const [depositing, setDepositing] = useState(false)
@@ -40,11 +40,19 @@ export default function WaitingRoomScreen() {
     }, [])
 
     const navigateToGame = async (matchRow: Match) => {
-        const { data: questions } = await supabase
+        if (!matchId) return
+        const { data: questions, error } = await supabase
             .from('match_questions')
-            .select('id, question_index, question_text, options')
-            .eq('match_id', matchId!)
+            .select('id, match_id, question_index, question_text, options, created_at')
+            .eq('match_id', matchId)
             .order('question_index', { ascending: true })
+
+        if (error || !questions || questions.length === 0) {
+            addLog(`❌ Failed to load questions: ${error?.message ?? 'no data'}`)
+            return
+        }
+
+        storeSetMatch(matchRow)
         setGameData(questions as MatchQuestion[], matchRow)
         router.push('/game')
     }
@@ -66,6 +74,19 @@ export default function WaitingRoomScreen() {
 
             await confirmDeposit(session.access_token, matchData.id, txSig, 'player2')
             addLog('✅ Deposit confirmed on backend')
+
+            // Refresh match state so deposit status updates immediately for player 2
+            const { data: latest, error } = await supabase
+                .from('matches')
+                .select('*')
+                .eq('id', matchData.id)
+                .single()
+            if (latest && !error) {
+                const refreshed = latest as Match
+                setMatch(refreshed)
+                storeSetMatch(refreshed)
+                addLog('🔄 Match state refreshed after deposit')
+            }
         } catch (err: any) {
             addLog(`❌ Deposit failed: ${err.message}`)
             Alert.alert('Deposit Failed', err.message ?? 'Could not deposit to escrow')

@@ -1,0 +1,17 @@
+program/
+backend/
+.git
+node_modules
+android/build
+ios/build
+target
+node_modules
+dist
+.cache
+.env
+.agent
+.agents
+.agents.json
+.skills-lock.json
+.opencode
+.claude

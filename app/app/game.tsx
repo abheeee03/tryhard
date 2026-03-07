@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router'
 import { supabase } from '../src/lib/supabase'
 import { submitAnswer } from '../src/lib/api'
 import { useTheme } from '../src/context/ThemeContext'
-import { Match } from '../src/types/game'
+import { Match, MatchQuestion } from '../src/types/game'
 import { useSession } from '../src/hooks/useSession'
 import { useGameStore } from '../src/stores/useGameStore'
 
@@ -27,7 +27,13 @@ export default function GameScreen() {
     const { theme } = useTheme()
     const { session } = useSession()
     const router = useRouter()
-    const { matchId, questions, match: initialMatch, setMatch: storeSetMatch } = useGameStore()
+    const {
+        matchId,
+        questions,
+        match: initialMatch,
+        setMatch: storeSetMatch,
+        setGameData,
+    } = useGameStore()
 
     const [match, setMatchState] = useState<Match | null>(initialMatch)
     const [phase, setPhase] = useState<Phase>(
@@ -95,6 +101,45 @@ export default function GameScreen() {
             Animated.spring(questionSlide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
         ]).start()
     }
+
+    // Fallback: if questions or match are missing (e.g. player joined late or state lost),
+    // hydrate from Supabase so both players always see the quiz.
+    useEffect(() => {
+        if (!matchId) return
+        if (questions.length > 0 && match) return
+
+        let cancelled = false
+        ;(async () => {
+            try {
+                const [{ data: matchRow }, { data: qs }] = await Promise.all([
+                    supabase
+                        .from('matches')
+                        .select('*')
+                        .eq('id', matchId)
+                        .single(),
+                    supabase
+                        .from('match_questions')
+                        .select('id, match_id, question_index, question_text, options, created_at')
+                        .eq('match_id', matchId)
+                        .order('question_index', { ascending: true }),
+                ])
+
+                if (cancelled) return
+                if (matchRow && qs && qs.length > 0) {
+                    const typedMatch = matchRow as Match
+                    const typedQs = qs as unknown as MatchQuestion[]
+                    setMatch(typedMatch)
+                    setGameData(typedQs, typedMatch)
+                }
+            } catch (err) {
+                console.error('[game] Failed to hydrate match/questions from backend:', err)
+            }
+        })()
+
+        return () => {
+            cancelled = true
+        }
+    }, [matchId, questions.length, !!match])
 
     useEffect(() => {
         if (phase !== 'question' || !questionPhaseStart || !match) return
