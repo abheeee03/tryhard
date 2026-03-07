@@ -11,7 +11,6 @@ import {
   LAMPORTS_PER_SOL,
   clusterApiUrl,
   SendTransactionError,
-  BlockhashNotFoundError,
 } from "@solana/web3.js";
 import { useWalletStore } from "../stores/wallet-store";
 
@@ -141,7 +140,6 @@ export function useWallet() {
           const errorMessage = lastError.message;
 
           if (
-            error instanceof BlockhashNotFoundError ||
             errorMessage.includes("Blockhash not found") ||
             errorMessage.includes("blockhash not found")
           ) {
@@ -155,16 +153,17 @@ export function useWallet() {
 
           if (error instanceof SendTransactionError) {
             try {
-              const logs = await error.getLogs();
-              if (logs && logs.length > 0) {
+              const logs = await error.getLogs(connection);
+              if (logs && Array.isArray(logs) && logs.length > 0) {
                 console.error("[wallet] Transaction logs:", logs);
               }
             } catch {
               // Ignore log retrieval errors
             }
 
-            if (error.transactionMessage) {
-              console.error("[wallet] Transaction message:", error.transactionMessage);
+            const txMsg = (error as any).transactionMessage;
+            if (txMsg) {
+              console.error("[wallet] Transaction message:", txMsg);
             }
           }
 
