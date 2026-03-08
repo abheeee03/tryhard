@@ -4,6 +4,7 @@ import { Buffer } from 'buffer';
 import express from 'express'
 import { matchRouter } from './routes/match';
 import { paymentRouter } from './routes/payment';
+import { demoRouter } from './routes/demo';
 import { auth } from './middleware';
 import { startGameEngine } from './controllers/matchEngine';
 import cors from 'cors'
@@ -26,6 +27,8 @@ const PORT = 8080;
 
 app.use('/api/match', auth, matchRouter);
 app.use('/api/payment', auth, paymentRouter);
+app.use('/api/demo', auth, demoRouter);
+
 app.get('/ping', (req, res) => {
     console.log("REQ COME TO BACKEND");
 

@@ -64,6 +64,7 @@ export default function CreateMatchScreen() {
     const [loading, setLoading] = useState(false)
     const [status, setStatus] = useState<string | null>(null)
     const btnScale = useRef(new Animated.Value(1)).current
+    const { isDemoMode } = useGameStore()
 
     const handleCreate = async () => {
         if (!session) return
@@ -71,8 +72,8 @@ export default function CreateMatchScreen() {
 
         const stakeAmount = parseFloat(stake) || 0
 
-        // If stake > 0, wallet must be connected
-        if (stakeAmount > 0 && !wallet.connected) {
+        // If stake > 0, wallet must be connected, unless demo mode
+        if (stakeAmount > 0 && !wallet.connected && !isDemoMode) {
             Alert.alert(
                 'Wallet Required',
                 'Connect your Solana wallet from the Profile tab to create a staked match.',
@@ -85,8 +86,8 @@ export default function CreateMatchScreen() {
 
         try {
             // Step 1: Create match on backend
-            setStatus('Creating match…')
-            console.log('[create-match] Creating match…')
+            setStatus(isDemoMode ? 'Creating Demo Match…' : 'Creating match…')
+            console.log(`[create-match] Creating match… (demo: ${isDemoMode})`)
             const res = await createMatch(session.access_token, {
                 time_per_que: timePerQ,
                 category: category.trim(),
@@ -94,6 +95,7 @@ export default function CreateMatchScreen() {
                 stake_amount: stakeAmount,
                 difficulty,
                 player1_wallet: wallet.publicKey?.toBase58() ?? null,
+                isDemoMode
             })
 
             if (res.status !== 'SUCCESS') {
@@ -107,25 +109,32 @@ export default function CreateMatchScreen() {
             console.log(`[create-match] Match created: ${matchId}`)
 
             // Step 2: If staked, deposit to escrow
-            if (stakeAmount > 0 && wallet.publicKey) {
-                setStatus('Depositing to escrow…')
-                console.log(`[create-match] Building escrow initialize tx for ${stakeAmount} SOL…`)
+            if (stakeAmount > 0) {
+                if (isDemoMode) {
+                    setStatus('Mocking Demo Deposit…')
+                    console.log(`[create-match] Demo mode: simulating deposit confirm for ${stakeAmount} SOL…`)
+                    await confirmDeposit(session.access_token, matchId, `DEMO_TX_${Date.now()}`, 'player1', true)
+                    console.log(`[create-match] ✅ Demo Deposit confirmed`)
+                } else if (wallet.publicKey) {
+                    setStatus('Depositing to escrow…')
+                    console.log(`[create-match] Building escrow initialize tx for ${stakeAmount} SOL…`)
 
-                const gameId = matchIdToGameId(matchId)
-                const tx = buildInitializeEscrowTx(
-                    wallet.publicKey,
-                    gameId,
-                    solToLamports(stakeAmount),
-                    BACKEND_AUTH_PUBKEY
-                )
+                    const gameId = matchIdToGameId(matchId)
+                    const tx = buildInitializeEscrowTx(
+                        wallet.publicKey,
+                        gameId,
+                        solToLamports(stakeAmount),
+                        BACKEND_AUTH_PUBKEY
+                    )
 
-            const txSig = await wallet.signAndSendTransaction(tx)
-                console.log(`[create-match] ✅ Escrow deposit tx: ${txSig}`)
+                    const txSig = await wallet.signAndSendTransaction(tx)
+                    console.log(`[create-match] ✅ Escrow deposit tx: ${txSig}`)
 
-                // Step 3: Confirm deposit on backend
-                setStatus('Confirming deposit…')
-                await confirmDeposit(session.access_token, matchId, txSig, 'player1')
-                console.log(`[create-match] ✅ Deposit confirmed on backend`)
+                    // Step 3: Confirm deposit on backend
+                    setStatus('Confirming deposit…')
+                    await confirmDeposit(session.access_token, matchId, txSig, 'player1', false)
+                    console.log(`[create-match] ✅ Deposit confirmed on backend`)
+                }
             }
 
             setMatchId(matchId, true)
@@ -162,7 +171,7 @@ export default function CreateMatchScreen() {
                 <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
                     <Text style={s.backText}>← Back</Text>
                 </TouchableOpacity>
-                <Text style={s.topBarTitle}>New Battle</Text>
+                <Text style={s.topBarTitle}>New Battle {isDemoMode ? '(Demo)' : ''}</Text>
                 <View style={{ width: 60 }} />
             </View>
             <ScrollView contentContainerStyle={s.form}>
@@ -183,7 +192,7 @@ export default function CreateMatchScreen() {
                 <TextInput style={s.input} value={stake} onChangeText={setStake}
                     keyboardType="numeric" placeholder="0" placeholderTextColor={theme.textSecondary} />
 
-                {parseFloat(stake) > 0 && !wallet.connected && (
+                {parseFloat(stake) > 0 && !wallet.connected && !isDemoMode && (
                     <View style={s.warningCard}>
                         <Text style={s.warningText}>⚠ Connect your wallet to stake SOL</Text>
                     </View>
@@ -200,10 +209,10 @@ export default function CreateMatchScreen() {
 
 
 
-                {parseFloat(stake) > 0 && wallet.connected && (
+                {parseFloat(stake) > 0 && (wallet.connected || isDemoMode) && (
                     <View style={s.infoCard}>
                         <Text style={s.infoText}>
-                            💰 {parseFloat(stake)} SOL will be deposited to escrow on creation
+                            {isDemoMode ? `🎮 Demo: ${parseFloat(stake)} fake SOL staked!` : `💰 ${parseFloat(stake)} SOL will be deposited to escrow on creation`}
                         </Text>
                     </View>
                 )}

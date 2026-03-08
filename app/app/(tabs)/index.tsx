@@ -11,6 +11,8 @@ import { Match } from '../../src/types/game'
 import { useTheme } from '../../src/context/ThemeContext'
 import { useSession } from '../../src/hooks/useSession'
 import { useGameStore } from '../../src/stores/useGameStore'
+import { useWallet } from '../../src/hooks/useWallet'
+import { ConnectButton } from '../../src/components/ConnectButton'
 
 export default function HomeTab() {
   const { theme } = useTheme()
@@ -22,7 +24,9 @@ export default function HomeTab() {
   const [joining, setJoining] = useState<string | null>(null)
   const [searchCode, setSearchCode] = useState('')
   const [searching, setSearching] = useState(false)
-  const fabScale = useRef(new Animated.Value(1)).current
+  const [showJoinInput, setShowJoinInput] = useState(false)
+  
+  const { connected, connecting, publicKey, connect, disconnect } = useWallet()
 
   const fetchMatches = async () => {
     setLoading(true)
@@ -131,34 +135,58 @@ export default function HomeTab() {
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.container}>
         <View style={s.header}>
-          <Text style={s.headerTitle}>⚔ TRYHARD</Text>
-          <Text style={s.headerSub}>Live Battles</Text>
+          <ConnectButton
+            connected={connected}
+            connecting={connecting}
+            publicKey={publicKey?.toBase58() || null}
+            onConnect={connect}
+            onDisconnect={disconnect}
+          />
         </View>
 
-        <View style={s.searchBar}>
-          <TextInput
-            style={s.searchInput}
-            placeholder="Enter 6-digit match code"
-            placeholderTextColor={theme.textSecondary}
-            value={searchCode}
-            onChangeText={(t) => setSearchCode(t.toUpperCase().slice(0, 6))}
-            autoCapitalize="characters"
-            maxLength={6}
-            returnKeyType="search"
-            onSubmitEditing={handleCodeSearch}
-          />
-          <TouchableOpacity
-            style={[s.searchBtn, searchCode.length !== 6 && { opacity: 0.5 }]}
-            onPress={handleCodeSearch}
-            disabled={searching || searchCode.length !== 6}
+        <View style={s.actionButtonsRow}>
+          <TouchableOpacity 
+            style={[s.actionButton, s.joinMatchBtn]} 
+            onPress={() => setShowJoinInput(!showJoinInput)}
             activeOpacity={0.8}
           >
-            {searching
-              ? <ActivityIndicator color="#fff" size="small" />
-              : <Text style={s.searchBtnText}>JOIN</Text>
-            }
+            <Text style={s.actionButtonText}>Join Match</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[s.actionButton, s.createMatchBtn]} 
+            onPress={() => router.push('/create-match')}
+            activeOpacity={0.8}
+          >
+            <Text style={s.actionButtonText}>Create Match</Text>
           </TouchableOpacity>
         </View>
+
+        {showJoinInput && (
+          <View style={s.searchBar}>
+            <TextInput
+              style={s.searchInput}
+              placeholder="Enter 6-digit match code"
+              placeholderTextColor={theme.textSecondary}
+              value={searchCode}
+              onChangeText={(t) => setSearchCode(t.toUpperCase().slice(0, 6))}
+              autoCapitalize="characters"
+              maxLength={6}
+              returnKeyType="search"
+              onSubmitEditing={handleCodeSearch}
+            />
+            <TouchableOpacity
+              style={[s.searchBtn, searchCode.length !== 6 && { opacity: 0.5 }]}
+              onPress={handleCodeSearch}
+              disabled={searching || searchCode.length !== 6}
+              activeOpacity={0.8}
+            >
+              {searching
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={s.searchBtnText}>JOIN</Text>
+              }
+            </TouchableOpacity>
+          </View>
+        )}
 
         <FlatList
           data={matches}
@@ -183,17 +211,6 @@ export default function HomeTab() {
             )
           }
         />
-
-        <Animated.View style={[s.fab, { transform: [{ scale: fabScale }] }]}>
-          <TouchableOpacity
-            onPress={() => router.push('/create-match')}
-            onPressIn={() => Animated.spring(fabScale, { toValue: 0.9, useNativeDriver: true }).start()}
-            onPressOut={() => Animated.spring(fabScale, { toValue: 1, useNativeDriver: true }).start()}
-            activeOpacity={0.9}
-          >
-            <Text style={s.fabText}>＋</Text>
-          </TouchableOpacity>
-        </Animated.View>
       </View>
     </SafeAreaView>
   )
@@ -212,14 +229,38 @@ const makeStyles = (theme: any) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.bg },
   container: { flex: 1, backgroundColor: theme.bg },
   header: {
-    paddingTop: 16, paddingBottom: 16, paddingHorizontal: 24,
+    paddingTop: 16, paddingBottom: 16, paddingHorizontal: 24, flexWrap: "wrap",
     backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
-  headerTitle: { fontSize: 26, fontWeight: '900', color: theme.accent, letterSpacing: 4 },
-  headerSub: { fontSize: 13, color: theme.textSecondary, marginTop: 2, letterSpacing: 1 },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 12,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 18,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  joinMatchBtn: {
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  createMatchBtn: {
+    backgroundColor: '#3B82F6', // theme.accent or blue-500
+  },
+  actionButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12,
-    gap: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border,
+    gap: 10, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
   searchInput: {
     flex: 1, backgroundColor: theme.card, borderRadius: 12, paddingHorizontal: 16,
@@ -253,11 +294,4 @@ const makeStyles = (theme: any) => StyleSheet.create({
   emptyIcon: { fontSize: 64, marginBottom: 16 },
   emptyTitle: { color: theme.text, fontSize: 20, fontWeight: '700', marginBottom: 8 },
   emptySub: { color: theme.textSecondary, fontSize: 14 },
-  fab: {
-    position: 'absolute', bottom: 32, right: 24, width: 60, height: 60,
-    borderRadius: 30, backgroundColor: theme.accent, alignItems: 'center',
-    justifyContent: 'center', elevation: 8, shadowColor: theme.accent,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 8,
-  },
-  fabText: { color: '#fff', fontSize: 30, fontWeight: '300', lineHeight: 34 },
 })

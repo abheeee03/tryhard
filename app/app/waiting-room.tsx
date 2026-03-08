@@ -18,7 +18,7 @@ export default function WaitingRoomScreen() {
     const { session } = useSession()
     const router = useRouter()
     const wallet = useWallet()
-    const { matchId, isPlayer1, setGameData, setMatch: storeSetMatch } = useGameStore()
+    const { matchId, isPlayer1, setGameData, setMatch: storeSetMatch, isDemoMode } = useGameStore()
     const [match, setMatch] = useState<Match | null>(null)
     const [starting, setStarting] = useState(false)
     const [depositing, setDepositing] = useState(false)
@@ -59,21 +59,31 @@ export default function WaitingRoomScreen() {
 
     // Player 2 escrow deposit
     const handlePlayer2Deposit = async (matchData: Match) => {
-        if (!session || !wallet.connected || !wallet.publicKey || !matchData) return
+        if (!session || !matchData) return
         if (matchData.stake_amount <= 0) return
         if (matchData.player2_deposit_tx) return // already deposited
+
+        if (!wallet.connected && !wallet.publicKey && !isDemoMode) {
+            return
+        }
 
         setDepositing(true)
         addLog(`Depositing ${matchData.stake_amount} SOL to escrow…`)
 
         try {
-            const gameId = matchIdToGameId(matchData.id)
-            const tx = buildJoinEscrowTx(wallet.publicKey, gameId)
-            const txSig = await wallet.signAndSendTransaction(tx)
-            addLog(`✅ Escrow deposit tx: ${txSig.slice(0, 8)}…`)
+            if (isDemoMode) {
+                addLog(`[demo] Simulating deposit of ${matchData.stake_amount} SOL…`)
+                await confirmDeposit(session.access_token, matchData.id, `DEMO_TX_${Date.now()}`, 'player2', true)
+                addLog('✅ Demo Deposit Confirmed')
+            } else if (wallet.publicKey) {
+                const gameId = matchIdToGameId(matchData.id)
+                const tx = buildJoinEscrowTx(wallet.publicKey, gameId)
+                const txSig = await wallet.signAndSendTransaction(tx)
+                addLog(`✅ Escrow deposit tx: ${txSig.slice(0, 8)}…`)
 
-            await confirmDeposit(session.access_token, matchData.id, txSig, 'player2')
-            addLog('✅ Deposit confirmed on backend')
+                await confirmDeposit(session.access_token, matchData.id, txSig, 'player2', false)
+                addLog('✅ Deposit confirmed on backend')
+            }
 
             // Refresh match state so deposit status updates immediately for player 2
             const { data: latest, error } = await supabase
@@ -225,17 +235,17 @@ export default function WaitingRoomScreen() {
                     <TouchableOpacity
                         style={[s.depositBtn, depositing && { opacity: 0.7 }]}
                         onPress={() => match && handlePlayer2Deposit(match)}
-                        disabled={depositing || !wallet.connected}
+                        disabled={depositing || (!wallet.connected && !isDemoMode)}
                         activeOpacity={0.85}
                     >
                         {depositing
                             ? <ActivityIndicator color="#fff" />
-                            : <Text style={s.depositBtnText}>DEPOSIT {match?.stake_amount} SOL ⚡</Text>
+                            : <Text style={s.depositBtnText}>{isDemoMode ? `DEMO DEPOSIT ${match?.stake_amount} SOL ⚡` : `DEPOSIT ${match?.stake_amount} SOL ⚡`}</Text>
                         }
                     </TouchableOpacity>
                 )}
 
-                {needsP2Deposit && !wallet.connected && (
+                {needsP2Deposit && !wallet.connected && !isDemoMode && (
                     <View style={s.warningCard}>
                         <Text style={s.warningText}>⚠ Connect wallet from Profile tab first</Text>
                     </View>

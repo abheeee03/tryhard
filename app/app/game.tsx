@@ -96,11 +96,20 @@ export default function GameScreen() {
         questionSlide.setValue(30); questionOpacity.setValue(0)
         setQuestionPhaseStart(Date.now())
         setPhase('question')
-        Animated.parallel([
-            Animated.timing(questionOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-            Animated.spring(questionSlide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
-        ]).start()
+        // Animation is triggered by the useEffect below
     }
+
+    // Animate question content visible whenever we enter the 'question' phase.
+    // This covers both the normal interlude→question path AND the direct-entry
+    // case (player loads game when match is already active).
+    useEffect(() => {
+        if (phase === 'question') {
+            Animated.parallel([
+                Animated.timing(questionOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+                Animated.spring(questionSlide, { toValue: 0, tension: 80, friction: 10, useNativeDriver: true }),
+            ]).start()
+        }
+    }, [phase, match?.current_question_index])
 
     // Fallback: if questions or match are missing (e.g. player joined late or state lost),
     // hydrate from Supabase so both players always see the quiz.
@@ -186,9 +195,29 @@ export default function GameScreen() {
         await submitAnswer(session.access_token, matchId!, { answer: optionIndex, question_id: questionId })
     }
 
-    if (!match || !matchId) return null
-
     const s = makeStyles(theme)
+
+    // While match/questions are being hydrated, show a basic loading screen instead of a blank view
+    if (!matchId) {
+        return (
+            <View style={s.container}>
+                <Text style={{ color: theme.text, textAlign: 'center', marginTop: 100 }}>
+                    No match loaded.
+                </Text>
+            </View>
+        )
+    }
+
+    if (!match) {
+        return (
+            <View style={s.container}>
+                <Text style={{ color: theme.text, textAlign: 'center', marginTop: 100 }}>
+                    Loading match and questions…
+                </Text>
+            </View>
+        )
+    }
+
     const currentQ = questions[match.current_question_index]
     const isAnswered = answered.has(match.current_question_index)
     const timerNumColor = timeLeft <= 3 ? theme.danger : timeLeft <= 5 ? theme.warning : theme.success
@@ -244,20 +273,13 @@ export default function GameScreen() {
 
     return (
         <View style={s.container}>
-            <View style={s.header}>
-                <View>
-                    <Text style={s.qCountLabel}>QUESTION</Text>
-                    <Text style={s.qCount}>{match.current_question_index + 1}<Text style={s.qCountTotal}> / {match.total_questions}</Text></Text>
-                </View>
-                <View style={s.timerBlock}>
-                    <Text style={[s.timerNumber, { color: timerNumColor }]}>{timeLeft}</Text>
-                    <Text style={s.timerUnit}>sec</Text>
-                </View>
-                <View style={s.categoryBadge}>
-                    <Text style={s.categoryText}>{match.category}</Text>
+            <View style={s.topBar}>
+                <View style={[s.timerPill, timeLeft <= 3 && { backgroundColor: theme.danger + '20' }]}>
+                    <Text style={[s.timerText, timeLeft <= 3 && { color: theme.danger }]}>
+                        Time left : 00:{timeLeft.toString().padStart(2, '0')}
+                    </Text>
                 </View>
             </View>
-            <View style={[s.timerAccent, { backgroundColor: timerNumColor }]} />
             <Animated.View style={[s.questionBlock, { opacity: questionOpacity, transform: [{ translateY: questionSlide }] }]}>
                 <Text style={s.questionText}>{currentQ.question_text}</Text>
             </Animated.View>
@@ -270,9 +292,6 @@ export default function GameScreen() {
                             style={[s.optionBtn, isSelected && s.optionSelected, dimmed && s.optionDimmed]}
                             onPress={() => handleAnswer(opt.index, currentQ.id)}
                             disabled={isAnswered} activeOpacity={0.8}>
-                            <View style={[s.optionLabel, isSelected && s.optionLabelSelected]}>
-                                <Text style={[s.optionLabelText, isSelected && { color: '#fff' }]}>{OPTION_LABELS[opt.index]}</Text>
-                            </View>
                             <Text style={[s.optionText, isSelected && s.optionTextSelected]} numberOfLines={2}>{opt.option}</Text>
                         </TouchableOpacity>
                     )
@@ -310,26 +329,16 @@ const makeStyles = (theme: any) => StyleSheet.create({
     interludeLabel: { fontSize: 12, fontWeight: '800', color: theme.textSecondary, letterSpacing: 3, marginBottom: 24 },
     interludeQNum: { fontSize: 18, fontWeight: '700', color: theme.text, marginTop: 24, marginBottom: 8 },
     interludeCategory: { fontSize: 13, color: theme.accent, fontWeight: '600', letterSpacing: 1 },
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 56, paddingHorizontal: 20, paddingBottom: 14, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
-    qCountLabel: { fontSize: 10, fontWeight: '700', color: theme.textSecondary, letterSpacing: 2 },
-    qCount: { fontSize: 24, fontWeight: '900', color: theme.text },
-    qCountTotal: { fontSize: 16, color: theme.textSecondary, fontWeight: '600' },
-    timerBlock: { alignItems: 'center' },
-    timerNumber: { fontSize: 48, fontWeight: '900', lineHeight: 54, textAlign: 'center' },
-    timerUnit: { fontSize: 11, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginTop: -4 },
-    timerAccent: { height: 3, width: '100%' },
-    categoryBadge: { backgroundColor: theme.accentSoft, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
-    categoryText: { color: theme.accent, fontWeight: '700', fontSize: 11 },
-    questionBlock: { flex: 1, justifyContent: 'center', paddingHorizontal: 24, paddingVertical: 16 },
-    questionText: { fontSize: 20, fontWeight: '700', color: theme.text, textAlign: 'center', lineHeight: 30 },
-    optionsBlock: { padding: 20, gap: 10 },
-    optionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: 14, padding: 16, borderWidth: 1.5, borderColor: theme.border, gap: 14 },
-    optionSelected: { borderColor: theme.accent, backgroundColor: theme.accentSoft },
+    topBar: { alignItems: 'center', paddingTop: 60, paddingBottom: 20 },
+    timerPill: { backgroundColor: '#E0E0E0', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
+    timerText: { color: '#111', fontSize: 14, fontWeight: '600' },
+    questionBlock: { flex: 0.8, justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 20 },
+    questionText: { fontSize: 24, fontWeight: '400', color: theme.text, textAlign: 'center', lineHeight: 32 },
+    optionsBlock: { paddingHorizontal: 24, paddingBottom: 40, gap: 16 },
+    optionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', borderRadius: 999, paddingVertical: 18, paddingHorizontal: 16, borderWidth: 1, borderColor: '#333' },
+    optionSelected: { borderColor: '#3B82F6', borderWidth: 2 },
     optionDimmed: { opacity: 0.4 },
-    optionLabel: { width: 32, height: 32, borderRadius: 8, borderWidth: 1.5, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
-    optionLabelSelected: { backgroundColor: theme.accent, borderColor: theme.accent },
-    optionLabelText: { color: theme.textSecondary, fontWeight: '900', fontSize: 13 },
-    optionText: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '500', lineHeight: 20 },
-    optionTextSelected: { color: theme.accent, fontWeight: '700' },
-    waitHint: { textAlign: 'center', color: theme.textSecondary, fontSize: 13, paddingBottom: 24, fontWeight: '500' },
+    optionText: { color: theme.text, fontSize: 18, fontWeight: '400', textAlign: 'center' },
+    optionTextSelected: { color: theme.text },
+    waitHint: { textAlign: 'center', color: theme.textSecondary, fontSize: 13, paddingBottom: 40, fontWeight: '500', position: 'absolute', bottom: 10, alignSelf: 'center' },
 })

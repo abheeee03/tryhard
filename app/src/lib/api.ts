@@ -39,8 +39,12 @@ export const createMatch = (
         stake_amount: number;
         difficulty: string;
         player1_wallet?: string | null;
+        isDemoMode?: boolean;
     }
-) => apiRequest('/api/match/create', 'POST', payload, token);
+) => {
+    const route = payload.isDemoMode ? '/api/demo/match/create' : '/api/match/create';
+    return apiRequest(route, 'POST', payload, token);
+};
 
 export const joinMatch = (token: string, matchId: string, player2_wallet?: string | null) =>
     apiRequest(`/api/match/${matchId}/join`, 'POST', { player2_wallet }, token);
@@ -61,6 +65,9 @@ export const confirmDeposit = (
     token: string,
     matchId: string,
     txSignature: string,
-    role: 'player1' | 'player2'
-) => apiRequest(`/api/payment/${matchId}/confirm-deposit`, 'POST', { txSignature, role }, token);
-
+    role: 'player1' | 'player2',
+    isDemoMode?: boolean
+) => {
+    const route = isDemoMode ? `/api/demo/payment/${matchId}/confirm-deposit` : `/api/payment/${matchId}/confirm-deposit`;
+    return apiRequest(route, 'POST', { txSignature, role }, token);
+};

@@ -61,33 +61,31 @@ const styles = StyleSheet.create({
   button: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 16, // rounded-xl
     gap: 8,
-    borderWidth: 1,
   },
   disconnected: {
-    backgroundColor: "#9945FF",
-    borderColor: "#9945FF",
+    backgroundColor: "#3B82F6", // blue-500
   },
   connected: {
-    backgroundColor: "rgba(20, 241, 149, 0.1)",
-    borderColor: "#14F195",
+    backgroundColor: "rgba(59, 130, 246, 0.15)", // slightly tinted background when connected
+    borderWidth: 1,
+    borderColor: "#3B82F6",
   },
   connecting: {
-    backgroundColor: "#16161D",
-    borderColor: "#2A2A35",
+    backgroundColor: "#1E293B", // slate-800
   },
   buttonText: {
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 15,
+    fontWeight: "700",
   },
   connectedText: {
-    color: "#14F195",
-    fontSize: 13,
-    fontWeight: "600",
+    color: "#3B82F6",
+    fontSize: 15,
+    fontWeight: "700",
     fontFamily: "monospace",
   },
 });

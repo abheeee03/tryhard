@@ -1,7 +1,7 @@
 // app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Text } from "react-native";
+import { View, StyleSheet } from "react-native";
 
 export default function TabLayout() {
   return (
@@ -9,15 +9,21 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#0A0A0F",
-          borderTopColor: "#2A2A4A",
-          borderTopWidth: 1,
-          paddingBottom: 8,
-          paddingTop: 12,
-          height: 70,
+          position: "absolute",
+          backgroundColor: "transparent",
+          borderTopWidth: 0,
+          elevation: 0,
+          shadowOpacity: 0,
+          height: 80,
+          bottom: 20,
+          alignItems: "center",
+          flexDirection: "row",
+          justifyContent: "center",
         },
-        tabBarActiveTintColor: "#E94560",
-        tabBarInactiveTintColor: "#6B7280",
+        tabBarShowLabel: false,
+        tabBarItemStyle: {
+          marginTop: 15,
+        },
       }}
     >
       {/* Tab 1: Home / Battles */}
@@ -26,7 +32,9 @@ export default function TabLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ focused }) => (
-            <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.45 }}>⚔</Text>
+            <View style={[styles.tabIconContainer, focused && styles.activeTab]}>
+              <Ionicons name="home" size={24} color="#FFF" />
+            </View>
           ),
         }}
       />
@@ -36,8 +44,10 @@ export default function TabLayout() {
         name="matches"
         options={{
           title: "Matches",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="list" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.activeTab]}>
+              <Ionicons name="layers" size={24} color="#FFF" />
+            </View>
           ),
         }}
       />
@@ -47,11 +57,28 @@ export default function TabLayout() {
         name="account"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="person" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.tabIconContainer, focused && styles.activeTab]}>
+              <Ionicons name="person" size={24} color="#FFF" />
+            </View>
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(30, 30, 30, 0.9)", // Dark transparent for inactive
+    justifyContent: "center",
+    alignItems: "center",
+    marginHorizontal: -5, 
+  },
+  activeTab: {
+    backgroundColor: "#3B82F6", // blue-500
+  },
+});

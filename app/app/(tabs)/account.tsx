@@ -9,12 +9,14 @@ import { PlayerProfile } from '../../src/types/game'
 import { useSession } from '../../src/hooks/useSession'
 import { ConnectButton } from '../../src/components/ConnectButton'
 import { useWallet } from '../../src/hooks/useWallet'
+import { useGameStore } from '../../src/stores/useGameStore'
 
 export default function AccountTab() {
     const { theme, mode, toggleTheme } = useTheme()
     const { session } = useSession()
     const [profile, setProfile] = useState<PlayerProfile | null>(null)
     const wallet = useWallet()
+    const { isDemoMode, setIsDemoMode } = useGameStore()
 
     useEffect(() => {
         if (!session) return
@@ -65,12 +67,20 @@ export default function AccountTab() {
 
                 <Text style={s.sectionTitle}>SETTINGS</Text>
                 <View style={s.settingsCard}>
-                    <View style={s.settingRow}>
+                    <View style={[s.settingRow, { borderBottomWidth: 1, borderBottomColor: theme.border }]}>
                         <View>
                             <Text style={s.settingLabel}>{mode === 'dark' ? '🌙 Dark Mode' : '☀️ Light Mode'}</Text>
                             <Text style={s.settingDesc}>Toggle app appearance</Text>
                         </View>
                         <Switch value={mode === 'dark'} onValueChange={toggleTheme}
+                            trackColor={{ false: theme.border, true: theme.accent }} thumbColor="#fff" />
+                    </View>
+                    <View style={s.settingRow}>
+                        <View>
+                            <Text style={s.settingLabel}>🎮 Demo Mode</Text>
+                            <Text style={s.settingDesc}>Play without real SOL</Text>
+                        </View>
+                        <Switch value={isDemoMode} onValueChange={setIsDemoMode}
                             trackColor={{ false: theme.border, true: theme.accent }} thumbColor="#fff" />
                     </View>
                 </View>
