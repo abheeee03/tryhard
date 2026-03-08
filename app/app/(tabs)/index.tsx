@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   View, Text, TouchableOpacity, StyleSheet, FlatList, ActivityIndicator,
-  RefreshControl, Animated, Alert, TextInput
+  RefreshControl, Animated, Alert, TextInput, Image, Modal
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { supabase } from '../../src/lib/supabase'
@@ -12,7 +13,6 @@ import { useTheme } from '../../src/context/ThemeContext'
 import { useSession } from '../../src/hooks/useSession'
 import { useGameStore } from '../../src/stores/useGameStore'
 import { useWallet } from '../../src/hooks/useWallet'
-import { ConnectButton } from '../../src/components/ConnectButton'
 
 export default function HomeTab() {
   const { theme } = useTheme()
@@ -25,7 +25,7 @@ export default function HomeTab() {
   const [searchCode, setSearchCode] = useState('')
   const [searching, setSearching] = useState(false)
   const [showJoinInput, setShowJoinInput] = useState(false)
-  
+
   const { connected, connecting, publicKey, connect, disconnect } = useWallet()
 
   const fetchMatches = async () => {
@@ -99,34 +99,42 @@ export default function HomeTab() {
     const isJoining = joining === item.id
     return (
       <View style={s.card}>
-        <View style={s.cardRow}>
-          <View style={s.categoryBadge}>
-            <Text style={s.categoryText}>{item.category ?? 'General'}</Text>
-          </View>
-          <View style={[s.difficultyBadge]}>
-            <Text style={[s.difficultyText, { color: '#A0A0B8' }]}>⚔</Text>
-          </View>
-          {item.stake_amount > 0 && (
-            <View style={s.stakeBadge}>
-              <Text style={s.stakeText}>💰 {item.stake_amount}</Text>
+        <View style={s.cardTopRow}>
+          <Text style={s.cardTitle}>{item.category ?? 'General'}</Text>
+          <Ionicons name="heart-outline" size={28} color="#FFF" />
+        </View>
+
+        <View style={s.cardMiddle}>
+          {/* The illustration placeholder space */}
+        </View>
+
+        <View style={s.cardPriceRow}>
+          <Text style={s.cardPriceText}>{item.stake_amount}</Text>
+          <Image source={require('../../assets/solana-icon.png')} style={[s.solanaIcon, { tintColor: '#fff' }]} />
+        </View>
+
+        <View style={s.cardBottomRow}>
+          <View style={s.pillGroup}>
+            <View style={s.pillBlack}>
+              <Text style={s.pillBlackText}>☆ 4.8</Text>
             </View>
-          )}
+            <View style={s.pillBlack}>
+              <Text style={s.pillBlackText}>{item.total_questions} Qs</Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={[s.joinBtn, isJoining && s.joinBtnDisabled]}
+            onPress={() => handleJoin(item.id)}
+            disabled={!!joining}
+            activeOpacity={0.8}
+          >
+            {isJoining
+              ? <ActivityIndicator color="#000" size="small" />
+              : <Text style={s.joinBtnText}>JOIN</Text>
+            }
+          </TouchableOpacity>
         </View>
-        <View style={s.cardMeta}>
-          <MetaChip icon="❓" label={`${item.total_questions} Questions`} theme={theme} />
-          <MetaChip icon="⏱" label={`${item.question_duration_seconds}s / Q`} theme={theme} />
-        </View>
-        <TouchableOpacity
-          style={[s.joinBtn, isJoining && s.joinBtnDisabled]}
-          onPress={() => handleJoin(item.id)}
-          disabled={!!joining}
-          activeOpacity={0.8}
-        >
-          {isJoining
-            ? <ActivityIndicator color="#fff" size="small" />
-            : <Text style={s.joinBtnText}>JOIN BATTLE ⚔</Text>
-          }
-        </TouchableOpacity>
       </View>
     )
   }
@@ -135,25 +143,19 @@ export default function HomeTab() {
     <SafeAreaView style={s.safe} edges={['top']}>
       <View style={s.container}>
         <View style={s.header}>
-          <ConnectButton
-            connected={connected}
-            connecting={connecting}
-            publicKey={publicKey?.toBase58() || null}
-            onConnect={connect}
-            onDisconnect={disconnect}
-          />
+          <Text style={s.headerTitle}>BATTLES</Text>
         </View>
 
         <View style={s.actionButtonsRow}>
-          <TouchableOpacity 
-            style={[s.actionButton, s.joinMatchBtn]} 
+          <TouchableOpacity
+            style={[s.actionButton, s.joinMatchBtn]}
             onPress={() => setShowJoinInput(!showJoinInput)}
             activeOpacity={0.8}
           >
             <Text style={s.actionButtonText}>Join Match</Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[s.actionButton, s.createMatchBtn]} 
+          <TouchableOpacity
+            style={[s.actionButton, s.createMatchBtn]}
             onPress={() => router.push('/create-match')}
             activeOpacity={0.8}
           >
@@ -161,32 +163,41 @@ export default function HomeTab() {
           </TouchableOpacity>
         </View>
 
-        {showJoinInput && (
-          <View style={s.searchBar}>
-            <TextInput
-              style={s.searchInput}
-              placeholder="Enter 6-digit match code"
-              placeholderTextColor={theme.textSecondary}
-              value={searchCode}
-              onChangeText={(t) => setSearchCode(t.toUpperCase().slice(0, 6))}
-              autoCapitalize="characters"
-              maxLength={6}
-              returnKeyType="search"
-              onSubmitEditing={handleCodeSearch}
-            />
-            <TouchableOpacity
-              style={[s.searchBtn, searchCode.length !== 6 && { opacity: 0.5 }]}
-              onPress={handleCodeSearch}
-              disabled={searching || searchCode.length !== 6}
-              activeOpacity={0.8}
-            >
-              {searching
-                ? <ActivityIndicator color="#fff" size="small" />
-                : <Text style={s.searchBtnText}>JOIN</Text>
-              }
-            </TouchableOpacity>
+        <Modal
+          visible={showJoinInput}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowJoinInput(false)}
+        >
+          <View style={s.modalOverlay}>
+            <View style={s.modalContent}>
+              <Text style={s.modalTitle}>Enter Match Code</Text>
+              <TextInput
+                style={s.modalInput}
+                placeholder="6-DIGIT CODE"
+                placeholderTextColor={theme.textSecondary}
+                value={searchCode}
+                onChangeText={(t) => setSearchCode(t.toUpperCase().slice(0, 6))}
+                autoCapitalize="characters"
+                maxLength={6}
+                returnKeyType="search"
+                onSubmitEditing={handleCodeSearch}
+              />
+              <View style={s.modalActions}>
+                <TouchableOpacity style={s.modalCancelBtn} onPress={() => setShowJoinInput(false)}>
+                  <Text style={s.modalCancelText}>CANCEL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.modalJoinBtn, searchCode.length !== 6 && { opacity: 0.5 }]}
+                  onPress={handleCodeSearch}
+                  disabled={searching || searchCode.length !== 6}
+                >
+                  {searching ? <ActivityIndicator color="#fff" /> : <Text style={s.modalJoinText}>JOIN</Text>}
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
-        )}
+        </Modal>
 
         <FlatList
           data={matches}
@@ -229,9 +240,10 @@ const makeStyles = (theme: any) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.bg },
   container: { flex: 1, backgroundColor: theme.bg },
   header: {
-    paddingTop: 16, paddingBottom: 16, paddingHorizontal: 24, flexWrap: "wrap",
+    paddingTop: 16, paddingBottom: 16, paddingHorizontal: 24,
     backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border,
   },
+  headerTitle: { fontFamily: 'CabinetGrotesk', fontSize: 28, color: theme.text, letterSpacing: 2 },
   actionButtonsRow: {
     flexDirection: 'row',
     padding: 16,
@@ -253,45 +265,62 @@ const makeStyles = (theme: any) => StyleSheet.create({
     backgroundColor: '#3B82F6', // theme.accent or blue-500
   },
   actionButtonText: {
+    fontFamily: 'CabinetGrotesk',
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+
     letterSpacing: 1,
   },
-  searchBar: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12,
-    gap: 10, borderBottomWidth: 1, borderBottomColor: theme.border,
-  },
-  searchInput: {
-    flex: 1, backgroundColor: theme.card, borderRadius: 12, paddingHorizontal: 16,
-    paddingVertical: 12, color: theme.text, fontSize: 16, fontWeight: '800',
-    letterSpacing: 4, textAlign: 'center', borderWidth: 1, borderColor: theme.border,
-  },
-  searchBtn: {
-    backgroundColor: theme.accent, borderRadius: 12, paddingHorizontal: 20,
-    paddingVertical: 12, alignItems: 'center', justifyContent: 'center',
-  },
-  searchBtnText: { color: '#fff', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalContent: { backgroundColor: theme.surface, width: '100%', borderRadius: 24, padding: 24, borderWidth: 1, borderColor: theme.border },
+  modalTitle: { fontFamily: 'CabinetGrotesk', fontSize: 22, color: theme.text, marginBottom: 16, textAlign: 'center' },
+  modalInput: { fontFamily: 'CabinetGrotesk', backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border, borderRadius: 16, padding: 18, color: theme.text, fontSize: 24, letterSpacing: 6, textAlign: 'center', marginBottom: 24 },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  modalCancelBtn: { flex: 1, backgroundColor: theme.bg, padding: 16, borderRadius: 16, alignItems: 'center', borderWidth: 1, borderColor: theme.border },
+  modalCancelText: { fontFamily: 'CabinetGrotesk', color: theme.textSecondary, fontSize: 16 },
+  modalJoinBtn: { flex: 1, backgroundColor: '#3B82F6', padding: 16, borderRadius: 16, alignItems: 'center' },
+  modalJoinText: { fontFamily: 'CabinetGrotesk', color: '#fff', fontSize: 16, letterSpacing: 1 },
+
   list: { padding: 16, paddingBottom: 100 },
+
+  // New Card Styles
   card: {
-    backgroundColor: theme.surface, borderRadius: 16, padding: 18,
-    marginBottom: 14, borderWidth: 1, borderColor: theme.border,
+    backgroundColor: '#3B82F6', // Blue-500
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(0,0,0,0.1)',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    minHeight: 200,
+    justifyContent: 'space-between'
   },
-  cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 4, gap: 8 },
-  categoryBadge: {
-    backgroundColor: theme.accentSoft, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+  cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  cardTitle: { fontFamily: 'CabinetGrotesk', color: '#FFF', fontSize: 24, width: '70%' },
+
+  cardMiddle: {
+    height: 40,
   },
-  categoryText: { color: theme.accent, fontWeight: '700', fontSize: 12 },
-  difficultyBadge: { borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  difficultyText: { fontWeight: '700', fontSize: 12 },
-  stakeBadge: { backgroundColor: theme.card, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 },
-  stakeText: { color: theme.text, fontSize: 12, fontWeight: '600' },
-  cardMeta: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 14 },
-  joinBtn: { backgroundColor: theme.accent, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
+
+  cardPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  cardPriceText: { fontFamily: 'CabinetGrotesk', color: '#FFF', fontSize: 42, letterSpacing: -1 },
+  solanaIcon: { width: 32, height: 32, resizeMode: 'contain' },
+
+  cardBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  pillGroup: { flexDirection: 'row', gap: 8 },
+  pillBlack: { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  pillBlackText: { fontFamily: 'CabinetGrotesk', color: '#FFF', fontSize: 13 },
+
+  joinBtn: { backgroundColor: '#fff', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
   joinBtnDisabled: { opacity: 0.6 },
-  joinBtnText: { color: '#fff', fontWeight: '800', fontSize: 13, letterSpacing: 1 },
+  joinBtnText: { fontFamily: 'CabinetGrotesk', color: '#3B82F6', fontSize: 16, letterSpacing: 1 },
+
   emptyState: { alignItems: 'center', paddingTop: 80 },
   emptyIcon: { fontSize: 64, marginBottom: 16 },
-  emptyTitle: { color: theme.text, fontSize: 20, fontWeight: '700', marginBottom: 8 },
-  emptySub: { color: theme.textSecondary, fontSize: 14 },
+  emptyTitle: { fontFamily: 'CabinetGrotesk', color: theme.text, fontSize: 24, marginBottom: 8 },
+  emptySub: { fontFamily: 'CabinetGrotesk', color: theme.textSecondary, fontSize: 16 },
 })

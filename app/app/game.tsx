@@ -118,32 +118,32 @@ export default function GameScreen() {
         if (questions.length > 0 && match) return
 
         let cancelled = false
-        ;(async () => {
-            try {
-                const [{ data: matchRow }, { data: qs }] = await Promise.all([
-                    supabase
-                        .from('matches')
-                        .select('*')
-                        .eq('id', matchId)
-                        .single(),
-                    supabase
-                        .from('match_questions')
-                        .select('id, match_id, question_index, question_text, options, created_at')
-                        .eq('match_id', matchId)
-                        .order('question_index', { ascending: true }),
-                ])
+            ; (async () => {
+                try {
+                    const [{ data: matchRow }, { data: qs }] = await Promise.all([
+                        supabase
+                            .from('matches')
+                            .select('*')
+                            .eq('id', matchId)
+                            .single(),
+                        supabase
+                            .from('match_questions')
+                            .select('id, match_id, question_index, question_text, options, created_at')
+                            .eq('match_id', matchId)
+                            .order('question_index', { ascending: true }),
+                    ])
 
-                if (cancelled) return
-                if (matchRow && qs && qs.length > 0) {
-                    const typedMatch = matchRow as Match
-                    const typedQs = qs as unknown as MatchQuestion[]
-                    setMatch(typedMatch)
-                    setGameData(typedQs, typedMatch)
+                    if (cancelled) return
+                    if (matchRow && qs && qs.length > 0) {
+                        const typedMatch = matchRow as Match
+                        const typedQs = qs as unknown as MatchQuestion[]
+                        setMatch(typedMatch)
+                        setGameData(typedQs, typedMatch)
+                    }
+                } catch (err) {
+                    console.error('[game] Failed to hydrate match/questions from backend:', err)
                 }
-            } catch (err) {
-                console.error('[game] Failed to hydrate match/questions from backend:', err)
-            }
-        })()
+            })()
 
         return () => {
             cancelled = true
@@ -306,7 +306,7 @@ function InfoChip({ icon, label, theme }: { icon: string; label: string; theme: 
     return (
         <View style={{ alignItems: 'center', padding: 10, flex: 1 }}>
             <Text style={{ fontSize: 22, marginBottom: 4 }}>{icon}</Text>
-            <Text style={{ color: theme.text, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>{label}</Text>
+            <Text style={{ color: theme.text, fontSize: 12, textAlign: 'center' }}>{label}</Text>
         </View>
     )
 }
@@ -316,29 +316,29 @@ const makeStyles = (theme: any) => StyleSheet.create({
     modalBackdrop: { backgroundColor: 'rgba(0,0,0,0.85)' },
     modalCard: { marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: theme.border },
     countdownRing: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.accentSoft, borderWidth: 3, borderColor: theme.accent, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-    countdownNumber: { fontSize: 44, fontWeight: '900', color: theme.accent, lineHeight: 52 },
-    countdownLabel: { fontSize: 10, fontWeight: '800', color: theme.accent, letterSpacing: 2, marginTop: 2 },
+    countdownNumber: { fontSize: 44, color: theme.accent, lineHeight: 52 },
+    countdownLabel: { fontSize: 10, color: theme.accent, letterSpacing: 2, marginTop: 2 },
     matchInfoRow: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: theme.card, borderRadius: 14, marginBottom: 20, overflow: 'hidden' },
     divider: { height: 1, backgroundColor: theme.border, marginBottom: 16 },
-    tipsTitle: { fontSize: 11, fontWeight: '800', color: theme.textSecondary, letterSpacing: 2, marginBottom: 12 },
+    tipsTitle: { fontSize: 11, color: theme.textSecondary, letterSpacing: 2, marginBottom: 12 },
     tipsList: { maxHeight: 140, marginBottom: 16 },
     tipRow: { backgroundColor: theme.card, borderRadius: 10, padding: 10, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: theme.accent },
     tipText: { color: theme.text, fontSize: 13, lineHeight: 18 },
     interludeContainer: { alignItems: 'center', justifyContent: 'center' },
     interludeCard: { alignItems: 'center' },
-    interludeLabel: { fontSize: 12, fontWeight: '800', color: theme.textSecondary, letterSpacing: 3, marginBottom: 24 },
-    interludeQNum: { fontSize: 18, fontWeight: '700', color: theme.text, marginTop: 24, marginBottom: 8 },
-    interludeCategory: { fontSize: 13, color: theme.accent, fontWeight: '600', letterSpacing: 1 },
+    interludeLabel: { fontSize: 12, color: theme.textSecondary, letterSpacing: 3, marginBottom: 24 },
+    interludeQNum: { fontSize: 18, color: theme.text, marginTop: 24, marginBottom: 8 },
+    interludeCategory: { fontSize: 13, color: theme.accent, letterSpacing: 1 },
     topBar: { alignItems: 'center', paddingTop: 60, paddingBottom: 20 },
     timerPill: { backgroundColor: '#E0E0E0', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8 },
-    timerText: { color: '#111', fontSize: 14, fontWeight: '600' },
+    timerText: { color: '#111', fontSize: 14, },
     questionBlock: { flex: 0.8, justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 20 },
-    questionText: { fontSize: 24, fontWeight: '400', color: theme.text, textAlign: 'center', lineHeight: 32 },
+    questionText: { fontSize: 24, color: theme.text, textAlign: 'center', lineHeight: 32 },
     optionsBlock: { paddingHorizontal: 24, paddingBottom: 40, gap: 16 },
     optionBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent', borderRadius: 999, paddingVertical: 18, paddingHorizontal: 16, borderWidth: 1, borderColor: '#333' },
     optionSelected: { borderColor: '#3B82F6', borderWidth: 2 },
     optionDimmed: { opacity: 0.4 },
-    optionText: { color: theme.text, fontSize: 18, fontWeight: '400', textAlign: 'center' },
+    optionText: { color: theme.text, fontSize: 18, textAlign: 'center' },
     optionTextSelected: { color: theme.text },
-    waitHint: { textAlign: 'center', color: theme.textSecondary, fontSize: 13, paddingBottom: 40, fontWeight: '500', position: 'absolute', bottom: 10, alignSelf: 'center' },
+    waitHint: { textAlign: 'center', color: theme.textSecondary, fontSize: 13, paddingBottom: 40, position: 'absolute', bottom: 10, alignSelf: 'center' },
 })

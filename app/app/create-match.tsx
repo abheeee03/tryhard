@@ -1,17 +1,17 @@
 import React, { useState, useRef } from 'react'
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
-    ScrollView, ActivityIndicator, Alert, Animated
+    ScrollView, ActivityIndicator, Alert, Animated, Image
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { createMatch, confirmDeposit } from '../src/lib/api'
-import { useTheme } from '../src/context/ThemeContext'
-import { useSession } from '../src/hooks/useSession'
-import { useGameStore } from '../src/stores/useGameStore'
-import { ConnectButton } from '../src/components/ConnectButton'
-import { useWallet } from '../src/hooks/useWallet'
-import { buildInitializeEscrowTx, matchIdToGameId, solToLamports } from '../src/lib/escrow'
 import { PublicKey } from '@solana/web3.js'
+import { useSession } from '../src/hooks/useSession'
+import { useWallet } from '../src/hooks/useWallet'
+import { useGameStore } from '../src/stores/useGameStore'
+import { confirmDeposit, createMatch } from '../src/lib/api'
+import { buildInitializeEscrowTx, matchIdToGameId, solToLamports } from '../src/lib/escrow'
+import { ConnectButton } from '../src/components/ConnectButton'
+import { useTheme } from '../src/context/ThemeContext'
 
 // Backend authority pubkey — must match BACKEND_WALLET_SECRET on the server
 const BACKEND_AUTH_PUBKEY = new PublicKey(
@@ -39,8 +39,8 @@ function SegmentedPicker({ options, value, onChange, theme }: {
                 const active = opt.value === value
                 return (
                     <TouchableOpacity key={String(opt.value)} onPress={() => onChange(opt.value)}
-                        style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: 'center', backgroundColor: active ? theme.accent : theme.card, borderWidth: 1, borderColor: active ? theme.accent : theme.border }}>
-                        <Text style={{ color: active ? '#fff' : theme.textSecondary, fontWeight: '700', fontSize: 13 }}>
+                        style={{ flex: 1, paddingVertical: 16, borderRadius: 12, alignItems: 'center', backgroundColor: active ? '#3B82F6' : theme.surface, borderWidth: 2, borderColor: active ? '#3B82F6' : theme.border }}>
+                        <Text style={{ fontFamily: 'CabinetGrotesk', color: active ? '#fff' : theme.textSecondary, fontWeight: '900', fontSize: 16, letterSpacing: 1 }}>
                             {opt.label}
                         </Text>
                     </TouchableOpacity>
@@ -141,11 +141,11 @@ export default function CreateMatchScreen() {
             router.push('/waiting-room')
         } catch (err: any) {
             console.error('[create-match] Error:', err)
-            
+
             // Provide more helpful error messages based on the error
             const errorMsg = err?.message || String(err)
             let userFriendlyMsg = 'Something went wrong'
-            
+
             if (errorMsg.includes('Program') && errorMsg.includes('does not exist')) {
                 userFriendlyMsg = 'The game program is not deployed. Please contact support.'
             } else if (errorMsg.includes('insufficient funds')) {
@@ -155,7 +155,7 @@ export default function CreateMatchScreen() {
             } else if (errorMsg.includes('simulation failed')) {
                 userFriendlyMsg = 'Transaction simulation failed. Please try again.'
             }
-            
+
             Alert.alert('Error', userFriendlyMsg)
         } finally {
             setLoading(false)
@@ -169,7 +169,7 @@ export default function CreateMatchScreen() {
         <View style={s.container}>
             <View style={s.topBar}>
                 <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
-                    <Text style={s.backText}>← Back</Text>
+                    <Text style={s.backText}>← BACK</Text>
                 </TouchableOpacity>
                 <Text style={s.topBarTitle}>New Battle {isDemoMode ? '(Demo)' : ''}</Text>
                 <View style={{ width: 60 }} />
@@ -177,7 +177,7 @@ export default function CreateMatchScreen() {
             <ScrollView contentContainerStyle={s.form}>
                 <Text style={s.sectionLabel}>CATEGORY</Text>
                 <TextInput style={s.input} value={category} onChangeText={setCategory}
-                    placeholder="e.g. Science, History, Movies…" placeholderTextColor={theme.textSecondary} />
+                    placeholder="E.G. SCIENCE, GAMING…" placeholderTextColor={theme.textSecondary} autoCapitalize="characters" />
 
                 <Text style={s.sectionLabel}>TIME PER QUESTION</Text>
                 <SegmentedPicker options={TIME_OPTIONS} value={timePerQ} onChange={setTimePerQ} theme={theme} />
@@ -188,9 +188,12 @@ export default function CreateMatchScreen() {
                 <Text style={s.sectionLabel}>DIFFICULTY</Text>
                 <SegmentedPicker options={DIFFICULTY_OPTIONS} value={difficulty} onChange={setDifficulty} theme={theme} />
 
-                <Text style={s.sectionLabel}>STAKE AMOUNT (SOL)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={s.sectionLabel}>STAKE AMOUNT</Text>
+                    <Image source={require('../assets/solana-icon.png')} style={{ width: 16, height: 16, tintColor: theme.textSecondary }} />
+                </View>
                 <TextInput style={s.input} value={stake} onChangeText={setStake}
-                    keyboardType="numeric" placeholder="0" placeholderTextColor={theme.textSecondary} />
+                    keyboardType="numeric" placeholder="0.0" placeholderTextColor={theme.textSecondary} textAlign="center" />
 
                 {parseFloat(stake) > 0 && !wallet.connected && !isDemoMode && (
                     <View style={s.warningCard}>
@@ -241,20 +244,20 @@ export default function CreateMatchScreen() {
 }
 
 const makeStyles = (theme: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: theme.bg },
-    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 56, paddingBottom: 16, paddingHorizontal: 20, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
-    backBtn: { width: 60 },
-    backText: { color: theme.accent, fontSize: 15, fontWeight: '600' },
-    topBarTitle: { fontSize: 17, fontWeight: '800', color: theme.text },
-    form: { padding: 24, gap: 16 },
-    sectionLabel: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 2, marginBottom: -6 },
-    input: { backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 14, color: theme.text, fontSize: 15 },
-    createBtn: { backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 18, alignItems: 'center', marginTop: 8, shadowColor: theme.accent, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
-    createBtnText: { color: '#fff', fontWeight: '900', fontSize: 15, letterSpacing: 1.5 },
+    container: { flex: 1, backgroundColor: '#0F172A' },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 64, paddingBottom: 24, paddingHorizontal: 20, backgroundColor: '#0F172A' },
+    backBtn: { width: 80 },
+    backText: { fontFamily: 'CabinetGrotesk', color: '#3B82F6', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
+    topBarTitle: { fontFamily: 'CabinetGrotesk', fontSize: 24, fontWeight: '900', color: '#FFF', letterSpacing: 1 },
+    form: { padding: 24, gap: 24, paddingBottom: 60 },
+    sectionLabel: { fontFamily: 'CabinetGrotesk', fontSize: 12, fontWeight: '900', color: theme.textSecondary, letterSpacing: 2, marginBottom: -12 },
+    input: { fontFamily: 'CabinetGrotesk', backgroundColor: 'transparent', borderWidth: 2, borderColor: '#3B82F6', borderRadius: 16, padding: 18, color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 1 },
+    createBtn: { backgroundColor: '#3B82F6', borderRadius: 16, paddingVertical: 20, alignItems: 'center', marginTop: 16, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
+    createBtnText: { fontFamily: 'CabinetGrotesk', color: '#fff', fontWeight: '900', fontSize: 18, letterSpacing: 2 },
     warningCard: { backgroundColor: 'rgba(255, 170, 0, 0.1)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(255, 170, 0, 0.3)' },
-    warningText: { color: '#FFAA00', fontSize: 13, fontWeight: '600', textAlign: 'center' },
-    infoCard: { backgroundColor: 'rgba(20, 241, 149, 0.1)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(20, 241, 149, 0.3)' },
-    infoText: { color: '#14F195', fontSize: 13, fontWeight: '600', textAlign: 'center' },
-    statusCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: theme.border },
-    statusText: { color: theme.text, fontSize: 13, fontWeight: '600' },
+    warningText: { fontFamily: 'CabinetGrotesk', color: '#FFAA00', fontSize: 14, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+    infoCard: { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' },
+    infoText: { fontFamily: 'CabinetGrotesk', color: '#3B82F6', fontSize: 14, fontWeight: '800', textAlign: 'center', letterSpacing: 0.5 },
+    statusCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#3B82F6' },
+    statusText: { fontFamily: 'CabinetGrotesk', color: '#FFF', fontSize: 15, fontWeight: '800', letterSpacing: 1 },
 })

@@ -1,6 +1,6 @@
 .agent
 .agents
 .agents.json
-.skills-lock.json
 .opencode
 .claude
+skills-lock.json

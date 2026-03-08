@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import {
-    View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl
+    View, Text, StyleSheet, FlatList, ActivityIndicator, TouchableOpacity, RefreshControl, Image
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { supabase } from '../../src/lib/supabase'
@@ -79,52 +80,55 @@ export default function MatchesTab() {
                 onPress={() => canResume ? handleResume(item) : undefined}
                 activeOpacity={canResume ? 0.8 : 1}
             >
-                <View style={s.cardTop}>
-                    <View style={s.categoryBadge}>
-                        <Text style={s.categoryText}>{item.category ?? 'General'}</Text>
-                    </View>
-                    <View style={[s.statusBadge, { backgroundColor: STATUS_COLOR[item.status] + '22' }]}>
-                        <View style={[s.statusDot, { backgroundColor: STATUS_COLOR[item.status] }]} />
-                        <Text style={[s.statusText, { color: STATUS_COLOR[item.status] }]}>
-                            {STATUS_LABEL[item.status]}
-                        </Text>
-                    </View>
+                <View style={s.cardTopRow}>
+                    <Text style={s.cardTitle}>{item.category ?? 'General'}</Text>
+                    <Ionicons name="heart-outline" size={28} color="#FFF" />
                 </View>
 
-                <View style={s.cardMeta}>
-                    <Text style={s.metaText}>❓ {item.total_questions} Questions</Text>
-                    <Text style={s.metaText}>⏱ {item.question_duration_seconds}s / Q</Text>
-                    {isPlayer1 ? <Text style={s.metaText}>👑 You created</Text> : <Text style={s.metaText}>🎯 You joined</Text>}
-                </View>
-
-                {isFinished && (
-                    <View style={[s.resultBadge, {
-                        backgroundColor: isDraw ? '#FFB80022' : isWinner ? '#00C9A722' : '#FF475722',
-                        borderColor: isDraw ? '#FFB800' : isWinner ? '#00C9A7' : '#FF4757',
-                    }]}>
-                        <Text style={[s.resultText, {
-                            color: isDraw ? '#FFB800' : isWinner ? '#00C9A7' : '#FF4757'
+                <View style={s.cardMiddle}>
+                     {isFinished && (
+                        <View style={[s.resultBadge, {
+                            backgroundColor: isDraw ? '#FFB80022' : isWinner ? '#00C9A722' : '#FF475722',
+                            borderColor: isDraw ? '#FFB800' : isWinner ? '#00C9A7' : '#FF4757',
                         }]}>
-                            {isDraw ? '🤝 Draw' : isWinner ? '🏆 You Won' : '😔 You Lost'}
-                        </Text>
-                    </View>
-                )}
+                            <Text style={[s.resultText, {
+                                color: isDraw ? '#FFB800' : isWinner ? '#00C9A7' : '#FF4757'
+                            }]}>
+                                {isDraw ? '🤝 Draw' : isWinner ? '🏆 You Won' : '😔 You Lost'}
+                            </Text>
+                        </View>
+                    )}
+                </View>
 
-                {canResume && (
-                    <View style={s.resumeHint}>
-                        <Text style={s.resumeText}>Tap to resume →</Text>
+                <View style={s.cardPriceRow}>
+                    <Text style={s.cardPriceText}>{item.stake_amount}</Text>
+                    <Image source={require('../../assets/solana-icon.png')} style={[s.solanaIcon, { tintColor: '#fff' }]} />
+                </View>
+
+                <View style={s.cardBottomRow}>
+                    <View style={s.pillGroup}>
+                        <View style={s.pillBlack}>
+                            <Text style={s.pillBlackText}>
+                                {STATUS_LABEL[item.status]}
+                            </Text>
+                        </View>
+                        <View style={s.pillBlack}>
+                            <Text style={s.pillBlackText}>{item.total_questions} Qs</Text>
+                        </View>
                     </View>
-                )}
+
+                    {canResume && (
+                        <View style={s.resumeBtn}>
+                            <Text style={s.resumeBtnText}>RESUME</Text>
+                        </View>
+                    )}
+                </View>
             </TouchableOpacity>
         )
     }
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: theme.bg }} edges={['top']}>
-            <View style={s.header}>
-                <Text style={s.headerTitle}>YOUR MATCHES</Text>
-                <Text style={s.headerSub}>Match history & active games</Text>
-            </View>
             {loading ? (
                 <View style={s.center}>
                     <ActivityIndicator size="large" color={theme.accent} />
@@ -157,40 +161,51 @@ export default function MatchesTab() {
 }
 
 const makeStyles = (theme: any) => StyleSheet.create({
-    header: {
-        paddingHorizontal: 24, paddingVertical: 16,
-        backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border,
-    },
-    headerTitle: { fontSize: 22, fontWeight: '900', color: theme.text, letterSpacing: 3 },
-    headerSub: { fontSize: 13, color: theme.textSecondary, marginTop: 2, letterSpacing: 1 },
     center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
     list: { padding: 16, paddingBottom: 100 },
+    
+    // New Card Styles
     card: {
-        backgroundColor: theme.surface, borderRadius: 16, padding: 18,
-        marginBottom: 14, borderWidth: 1, borderColor: theme.border,
+        backgroundColor: '#3B82F6', // Blue from index
+        borderRadius: 24, 
+        padding: 20,
+        marginBottom: 16, 
+        borderWidth: 1, 
+        borderColor: 'rgba(0,0,0,0.1)',
+        shadowColor: '#3B82F6',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        minHeight: 200, // accommodate the illustration space
+        justifyContent: 'space-between'
     },
-    cardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 8, flexWrap: 'wrap' },
-    categoryBadge: {
-        backgroundColor: theme.accentSoft, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4,
+    cardTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    cardTitle: { fontFamily: 'CabinetGrotesk', color: '#FFF', fontSize: 24, fontWeight: '900', width: '70%' },
+    
+    cardMiddle: {
+        height: 40, // Space for the illustration body as seen in ref
+        justifyContent: 'center',
     },
-    categoryText: { color: theme.accent, fontWeight: '700', fontSize: 12 },
-    statusBadge: {
-        flexDirection: 'row', alignItems: 'center', borderRadius: 8,
-        paddingHorizontal: 10, paddingVertical: 4, gap: 6,
-    },
-    statusDot: { width: 6, height: 6, borderRadius: 3 },
-    statusText: { fontWeight: '700', fontSize: 12 },
-    cardMeta: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 12 },
-    metaText: { color: theme.textSecondary, fontSize: 13 },
+
+    cardPriceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+    cardPriceText: { fontFamily: 'CabinetGrotesk', color: '#FFF', fontSize: 42, fontWeight: '900', letterSpacing: -1 },
+    solanaIcon: { width: 32, height: 32, resizeMode: 'contain' },
+
+    cardBottomRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    pillGroup: { flexDirection: 'row', gap: 8 },
+    pillBlack: { backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+    pillBlackText: { fontFamily: 'CabinetGrotesk', color: '#FFF', fontSize: 13, fontWeight: '800' },
+    
+    resumeBtn: { backgroundColor: '#fff', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
+    resumeBtnText: { fontFamily: 'CabinetGrotesk', color: '#3B82F6', fontWeight: '900', fontSize: 14, letterSpacing: 1 },
+
     resultBadge: {
-        borderRadius: 10, paddingVertical: 8, alignItems: 'center',
-        borderWidth: 1, marginBottom: 4,
+        borderRadius: 10, paddingVertical: 8, alignItems: 'center', borderWidth: 1, width: '60%', backgroundColor: 'rgba(0,0,0,0.2)', borderColor: 'rgba(255,255,255,0.2)'
     },
-    resultText: { fontWeight: '800', fontSize: 14, letterSpacing: 0.5 },
-    resumeHint: { alignItems: 'flex-end', marginTop: 4 },
-    resumeText: { color: theme.accent, fontSize: 12, fontWeight: '700' },
+    resultText: { fontFamily: 'CabinetGrotesk', fontWeight: '800', fontSize: 14, letterSpacing: 0.5, color: '#FFF' },
+
     emptyState: { alignItems: 'center', paddingTop: 80 },
     emptyIcon: { fontSize: 64, marginBottom: 16 },
-    emptyTitle: { color: theme.text, fontSize: 20, fontWeight: '700', marginBottom: 8 },
-    emptySub: { color: theme.textSecondary, fontSize: 14 },
+    emptyTitle: { fontFamily: 'CabinetGrotesk', color: theme.text, fontSize: 24, fontWeight: '900', marginBottom: 8 },
+    emptySub: { fontFamily: 'CabinetGrotesk', color: theme.textSecondary, fontSize: 16 },
 })

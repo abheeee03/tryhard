@@ -1,66 +1,65 @@
 // app/(tabs)/_layout.tsx
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { View, StyleSheet } from "react-native";
+import { View, StyleSheet, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTheme } from "../../src/context/ThemeContext";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets();
+  const { theme } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          position: "absolute",
-          backgroundColor: "transparent",
-          borderTopWidth: 0,
+          backgroundColor: theme.surface,
+          borderTopWidth: 1,
+          borderTopColor: theme.border,
           elevation: 0,
           shadowOpacity: 0,
-          height: 80,
-          bottom: 20,
-          alignItems: "center",
-          flexDirection: "row",
-          justifyContent: "center",
+          height: Platform.OS === 'ios' ? 88 : 70 + insets.bottom,
+          paddingBottom: Platform.OS === 'ios' ? 24 : insets.bottom + 10,
+          paddingTop: 10,
         },
-        tabBarShowLabel: false,
-        tabBarItemStyle: {
-          marginTop: 15,
+        tabBarShowLabel: true,
+        tabBarLabelStyle: {
+          fontFamily: 'CabinetGrotesk',
+          fontWeight: '800',
+          fontSize: 11,
+          marginTop: 4,
         },
+        tabBarActiveTintColor: '#3B82F6',
+        tabBarInactiveTintColor: theme.textSecondary,
       }}
     >
-      {/* Tab 1: Home / Battles */}
       <Tabs.Screen
         name="index"
         options={{
           title: "Home",
-          tabBarIcon: ({ focused }) => (
-            <View style={[styles.tabIconContainer, focused && styles.activeTab]}>
-              <Ionicons name="home" size={24} color="#FFF" />
-            </View>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={26} color={color} />
           ),
         }}
       />
 
-      {/* Tab 2: Your Matches */}
       <Tabs.Screen
         name="matches"
         options={{
           title: "Matches",
-          tabBarIcon: ({ focused }) => (
-            <View style={[styles.tabIconContainer, focused && styles.activeTab]}>
-              <Ionicons name="layers" size={24} color="#FFF" />
-            </View>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "layers" : "layers-outline"} size={26} color={color} />
           ),
         }}
       />
 
-      {/* Tab 3: Profile / Account */}
       <Tabs.Screen
         name="account"
         options={{
           title: "Profile",
-          tabBarIcon: ({ focused }) => (
-            <View style={[styles.tabIconContainer, focused && styles.activeTab]}>
-              <Ionicons name="person" size={24} color="#FFF" />
-            </View>
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "person" : "person-outline"} size={26} color={color} />
           ),
         }}
       />
@@ -69,16 +68,23 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  tabIconContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: "rgba(30, 30, 30, 0.9)", // Dark transparent for inactive
+  createTabContainer: {
+    top: -15, // Lift the button up
     justifyContent: "center",
     alignItems: "center",
-    marginHorizontal: -5, 
   },
-  activeTab: {
-    backgroundColor: "#3B82F6", // blue-500
-  },
+  createTabInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#3B82F6", // Consistent blue-500
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#3B82F6",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    borderWidth: 4,
+    borderColor: '#1A1A2E' // matches Dark surface, ideally dynamic but fine for now
+  }
 });

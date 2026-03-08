@@ -107,26 +107,26 @@ function StatCard({ label, value, theme, color }: { label: string; value: any; t
 }
 
 const statCardStyles = StyleSheet.create({
-    card: { flex: 1, borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, marginHorizontal: 4 },
-    value: { fontSize: 22, fontWeight: '800', marginBottom: 4 },
-    label: { fontSize: 11, fontWeight: '600', letterSpacing: 1 },
+    card: { flex: 1, borderRadius: 16, padding: 16, alignItems: 'center', borderWidth: 1, marginHorizontal: 4, shadowColor: '#000', shadowOffset: { width:0, height:2 }, shadowOpacity:0.05, shadowRadius:4 },
+    value: { fontFamily: 'CabinetGrotesk', fontSize: 28, fontWeight: '900', marginBottom: 4 },
+    label: { fontFamily: 'CabinetGrotesk', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
 })
 
 const makeStyles = (theme: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.bg },
     content: { padding: 24, paddingTop: 16 },
     header: { alignItems: 'center', marginBottom: 32 },
-    avatar: { width: 80, height: 80, borderRadius: 40, backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-    avatarText: { fontSize: 36, fontWeight: '800', color: '#fff' },
-    username: { fontSize: 22, fontWeight: '800', color: theme.text, marginBottom: 4 },
-    email: { fontSize: 13, color: theme.textSecondary },
-    sectionTitle: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 2, marginBottom: 12, marginTop: 8 },
-    statsRow: { flexDirection: 'row', marginBottom: 28 },
-    walletCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 20, borderWidth: 1, borderColor: theme.border, marginBottom: 28 },
-    settingsCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 4, borderWidth: 1, borderColor: theme.border, marginBottom: 24 },
+    avatar: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+    avatarText: { fontFamily: 'CabinetGrotesk', fontSize: 42, fontWeight: '900', color: '#fff' },
+    username: { fontFamily: 'CabinetGrotesk', fontSize: 28, fontWeight: '900', color: theme.text, marginBottom: 4 },
+    email: { fontFamily: 'CabinetGrotesk', fontSize: 14, color: theme.textSecondary, fontWeight: '600' },
+    sectionTitle: { fontFamily: 'CabinetGrotesk', fontSize: 13, fontWeight: '900', color: theme.textSecondary, letterSpacing: 2, marginBottom: 12, marginTop: 12 },
+    statsRow: { flexDirection: 'row', marginBottom: 32 },
+    walletCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 24, borderWidth: 1, borderColor: theme.border, marginBottom: 32 },
+    settingsCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 8, borderWidth: 1, borderColor: theme.border, marginBottom: 32 },
     settingRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-    settingLabel: { color: theme.text, fontSize: 15, fontWeight: '600', marginBottom: 2 },
-    settingDesc: { color: theme.textSecondary, fontSize: 12 },
-    signOutBtn: { backgroundColor: theme.surface, borderRadius: 12, borderWidth: 1, borderColor: theme.danger, paddingVertical: 14, alignItems: 'center', marginBottom: 40 },
-    signOutText: { color: theme.danger, fontWeight: '700', fontSize: 15 },
+    settingLabel: { fontFamily: 'CabinetGrotesk', color: theme.text, fontSize: 18, fontWeight: '800', marginBottom: 4 },
+    settingDesc: { fontFamily: 'CabinetGrotesk', color: theme.textSecondary, fontSize: 14, fontWeight: '600' },
+    signOutBtn: { backgroundColor: theme.surface, borderRadius: 16, borderWidth: 1, borderColor: theme.danger, paddingVertical: 18, alignItems: 'center', marginBottom: 40 },
+    signOutText: { fontFamily: 'CabinetGrotesk', color: theme.danger, fontWeight: '900', fontSize: 16, letterSpacing: 1 },
 })
