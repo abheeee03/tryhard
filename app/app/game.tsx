@@ -226,25 +226,16 @@ export default function GameScreen() {
         return (
             <View style={[s.container, { justifyContent: 'center' }]}>
                 <Animated.View style={[StyleSheet.absoluteFill, s.modalBackdrop, { opacity: modalOpacity }]} />
-                <Animated.View style={[s.modalCard, { opacity: modalOpacity }]}>
-                    <View style={s.countdownRing}>
-                        <Animated.Text style={[s.countdownNumber, { transform: [{ scale: countdownScale }] }]}>
+                <Animated.View style={[s.pregameCard, { opacity: modalOpacity }]}>
+                    <View style={s.countdownRingLarge}>
+                        <Animated.Text style={[s.countdownNumberLarge, { transform: [{ scale: countdownScale }] }]}>
                             {preGameCount}
                         </Animated.Text>
                         <Text style={s.countdownLabel}>GET READY</Text>
                     </View>
-                    <View style={s.matchInfoRow}>
-                        <InfoChip icon="📚" label={match.category} theme={theme} />
-                        <InfoChip icon="❓" label={`${match.total_questions} Questions`} theme={theme} />
-                        <InfoChip icon="⏱" label={`${match.question_duration_seconds}s / Q`} theme={theme} />
-                    </View>
-                    <View style={s.divider} />
-                    <Text style={s.tipsTitle}>TIPS & RULES</Text>
-                    <ScrollView style={s.tipsList} showsVerticalScrollIndicator={false}>
-                        {TIPS.map((tip, i) => (
-                            <View key={i} style={s.tipRow}><Text style={s.tipText}>{tip}</Text></View>
-                        ))}
-                    </ScrollView>
+
+                    <Text style={s.pregameQuoteTitle}>WAGMI! LET'S GO!</Text>
+                    <Text style={s.pregameQuoteSub}>MATCH STARTING SOON</Text>
                 </Animated.View>
             </View>
         )
@@ -255,8 +246,8 @@ export default function GameScreen() {
             <View style={[s.container, s.interludeContainer]}>
                 <View style={s.interludeCard}>
                     <Text style={s.interludeLabel}>UP NEXT</Text>
-                    <View style={s.countdownRing}>
-                        <Animated.Text style={[s.countdownNumber, { transform: [{ scale: countdownScale }] }]}>
+                    <View style={s.countdownRingLarge}>
+                        <Animated.Text style={[s.countdownNumberLarge, { transform: [{ scale: countdownScale }] }]}>
                             {interludeCount}
                         </Animated.Text>
                     </View>
@@ -314,16 +305,12 @@ function InfoChip({ icon, label, theme }: { icon: string; label: string; theme: 
 const makeStyles = (theme: any) => StyleSheet.create({
     container: { flex: 1, backgroundColor: theme.bg },
     modalBackdrop: { backgroundColor: 'rgba(0,0,0,0.85)' },
-    modalCard: { marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: 24, padding: 24, borderWidth: 1, borderColor: theme.border },
-    countdownRing: { width: 100, height: 100, borderRadius: 50, backgroundColor: theme.accentSoft, borderWidth: 3, borderColor: theme.accent, alignSelf: 'center', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-    countdownNumber: { fontSize: 44, color: theme.accent, lineHeight: 52 },
-    countdownLabel: { fontSize: 10, color: theme.accent, letterSpacing: 2, marginTop: 2 },
-    matchInfoRow: { flexDirection: 'row', justifyContent: 'space-around', backgroundColor: theme.card, borderRadius: 14, marginBottom: 20, overflow: 'hidden' },
-    divider: { height: 1, backgroundColor: theme.border, marginBottom: 16 },
-    tipsTitle: { fontSize: 11, color: theme.textSecondary, letterSpacing: 2, marginBottom: 12 },
-    tipsList: { maxHeight: 140, marginBottom: 16 },
-    tipRow: { backgroundColor: theme.card, borderRadius: 10, padding: 10, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: theme.accent },
-    tipText: { color: theme.text, fontSize: 13, lineHeight: 18 },
+    pregameCard: { marginHorizontal: 20, backgroundColor: theme.surface, borderRadius: 24, padding: 40, borderWidth: 2, borderColor: '#3B82F6', alignItems: 'center', shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16 },
+    countdownRingLarge: { width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(59, 130, 246, 0.1)', borderWidth: 4, borderColor: '#3B82F6', alignItems: 'center', justifyContent: 'center', marginBottom: 32 },
+    countdownNumberLarge: { fontFamily: 'CabinetGrotesk', fontSize: 64, color: '#3B82F6', fontWeight: '900', lineHeight: 72 },
+    countdownLabel: { fontFamily: 'CabinetGrotesk', fontSize: 12, color: '#3B82F6', fontWeight: '800', letterSpacing: 2, marginTop: 4 },
+    pregameQuoteTitle: { fontFamily: 'CabinetGrotesk', fontSize: 26, fontWeight: '900', color: theme.text, letterSpacing: 2, marginBottom: 8, textAlign: 'center' },
+    pregameQuoteSub: { fontFamily: 'CabinetGrotesk', fontSize: 14, fontWeight: '800', color: theme.textSecondary, letterSpacing: 3, textAlign: 'center' },
     interludeContainer: { alignItems: 'center', justifyContent: 'center' },
     interludeCard: { alignItems: 'center' },
     interludeLabel: { fontSize: 12, color: theme.textSecondary, letterSpacing: 3, marginBottom: 24 },
