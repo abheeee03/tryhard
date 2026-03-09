@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react'
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
-    ScrollView, ActivityIndicator, Alert, Animated, Image
+    ScrollView, ActivityIndicator, Alert, Animated, Image, Switch
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { PublicKey } from '@solana/web3.js'
@@ -39,8 +39,8 @@ function SegmentedPicker({ options, value, onChange, theme }: {
                 const active = opt.value === value
                 return (
                     <TouchableOpacity key={String(opt.value)} onPress={() => onChange(opt.value)}
-                        style={{ flex: 1, paddingVertical: 16, borderRadius: 12, alignItems: 'center', backgroundColor: active ? '#3B82F6' : theme.surface, borderWidth: 2, borderColor: active ? '#3B82F6' : theme.border }}>
-                        <Text style={{ fontFamily: 'CabinetGrotesk', color: active ? '#fff' : theme.textSecondary, fontWeight: '900', fontSize: 16, letterSpacing: 1 }}>
+                        style={{ flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', backgroundColor: active ? '#3B82F6' : theme.surface, borderWidth: 1, borderColor: active ? '#3B82F6' : theme.border }}>
+                        <Text style={{ fontFamily: 'CabinetGrotesk', color: active ? '#fff' : theme.textSecondary, fontSize: 14 }}>
                             {opt.label}
                         </Text>
                     </TouchableOpacity>
@@ -61,6 +61,7 @@ export default function CreateMatchScreen() {
     const [totalQ, setTotalQ] = useState(5)
     const [difficulty, setDifficulty] = useState('easy')
     const [stake, setStake] = useState('0')
+    const [isPrivate, setIsPrivate] = useState(false)
     const [loading, setLoading] = useState(false)
     const [status, setStatus] = useState<string | null>(null)
     const btnScale = useRef(new Animated.Value(1)).current
@@ -95,7 +96,8 @@ export default function CreateMatchScreen() {
                 stake_amount: stakeAmount,
                 difficulty,
                 player1_wallet: wallet.publicKey?.toBase58() ?? null,
-                isDemoMode
+                isDemoMode,
+                is_private: isPrivate
             })
 
             if (res.status !== 'SUCCESS') {
@@ -227,6 +229,19 @@ export default function CreateMatchScreen() {
                     </View>
                 )}
 
+                <View style={s.privateToggleRow}>
+                    <View>
+                        <Text style={s.settingLabel}>Private Match</Text>
+                        <Text style={s.settingDesc}>Only players with the 6-digit code can join</Text>
+                    </View>
+                    <Switch
+                        value={isPrivate}
+                        onValueChange={setIsPrivate}
+                        trackColor={{ false: '#1E293B', true: '#3B82F6' }}
+                        thumbColor="#fff"
+                    />
+                </View>
+
                 <Animated.View style={{ transform: [{ scale: btnScale }] }}>
                     <TouchableOpacity style={[s.createBtn, loading && { opacity: 0.7 }]} onPress={handleCreate}
                         onPressIn={() => Animated.spring(btnScale, { toValue: 0.96, useNativeDriver: true }).start()}
@@ -244,20 +259,23 @@ export default function CreateMatchScreen() {
 }
 
 const makeStyles = (theme: any) => StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#0F172A' },
-    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 64, paddingBottom: 24, paddingHorizontal: 20, backgroundColor: '#0F172A' },
+    container: { flex: 1, backgroundColor: theme.bg },
+    topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 64, paddingBottom: 24, paddingHorizontal: 20, backgroundColor: theme.bg },
     backBtn: { width: 80 },
-    backText: { fontFamily: 'CabinetGrotesk', color: '#3B82F6', fontSize: 16, fontWeight: '900', letterSpacing: 1 },
-    topBarTitle: { fontFamily: 'CabinetGrotesk', fontSize: 24, fontWeight: '900', color: '#FFF', letterSpacing: 1 },
-    form: { padding: 24, gap: 24, paddingBottom: 60 },
-    sectionLabel: { fontFamily: 'CabinetGrotesk', fontSize: 12, fontWeight: '900', color: theme.textSecondary, letterSpacing: 2, marginBottom: -12 },
-    input: { fontFamily: 'CabinetGrotesk', backgroundColor: 'transparent', borderWidth: 2, borderColor: '#3B82F6', borderRadius: 16, padding: 18, color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 1 },
-    createBtn: { backgroundColor: '#3B82F6', borderRadius: 16, paddingVertical: 20, alignItems: 'center', marginTop: 16, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8 },
-    createBtnText: { fontFamily: 'CabinetGrotesk', color: '#fff', fontWeight: '900', fontSize: 18, letterSpacing: 2 },
+    backText: { fontFamily: 'CabinetGrotesk', color: '#3B82F6', fontSize: 16 },
+    topBarTitle: { fontFamily: 'CabinetGrotesk', fontSize: 20, color: theme.text },
+    form: { padding: 20, gap: 16, paddingBottom: 60 },
+    sectionLabel: { fontFamily: 'CabinetGrotesk', fontSize: 12, color: theme.textSecondary, letterSpacing: 1, marginBottom: -8 },
+    input: { fontFamily: 'CabinetGrotesk', backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 14, color: theme.text, fontSize: 16 },
+    createBtn: { backgroundColor: '#3B82F6', borderRadius: 12, paddingVertical: 16, alignItems: 'center', marginTop: 12, shadowColor: '#3B82F6', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 4 },
+    createBtnText: { fontFamily: 'CabinetGrotesk', color: '#fff', fontSize: 16, letterSpacing: 1 },
     warningCard: { backgroundColor: 'rgba(255, 170, 0, 0.1)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: 'rgba(255, 170, 0, 0.3)' },
     warningText: { fontFamily: 'CabinetGrotesk', color: '#FFAA00', fontSize: 14, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
     infoCard: { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' },
     infoText: { fontFamily: 'CabinetGrotesk', color: '#3B82F6', fontSize: 14, fontWeight: '800', textAlign: 'center', letterSpacing: 0.5 },
     statusCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#3B82F6' },
-    statusText: { fontFamily: 'CabinetGrotesk', color: '#FFF', fontSize: 15, fontWeight: '800', letterSpacing: 1 },
+    statusText: { fontFamily: 'CabinetGrotesk', color: theme.text, fontSize: 14 },
+    privateToggleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: theme.surface, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
+    settingLabel: { fontFamily: 'CabinetGrotesk', color: theme.text, fontSize: 16, marginBottom: 2 },
+    settingDesc: { fontFamily: 'CabinetGrotesk', color: theme.textSecondary, fontSize: 12 },
 })

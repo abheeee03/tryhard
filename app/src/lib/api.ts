@@ -40,6 +40,7 @@ export const createMatch = (
         difficulty: string;
         player1_wallet?: string | null;
         isDemoMode?: boolean;
+        is_private?: boolean;
     }
 ) => {
     const route = payload.isDemoMode ? '/api/demo/match/create' : '/api/match/create';

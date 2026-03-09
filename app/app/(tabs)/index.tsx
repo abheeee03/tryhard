@@ -12,7 +12,6 @@ import { Match } from '../../src/types/game'
 import { useTheme } from '../../src/context/ThemeContext'
 import { useSession } from '../../src/hooks/useSession'
 import { useGameStore } from '../../src/stores/useGameStore'
-import { useWallet } from '../../src/hooks/useWallet'
 
 export default function HomeTab() {
   const { theme } = useTheme()
@@ -26,14 +25,13 @@ export default function HomeTab() {
   const [searching, setSearching] = useState(false)
   const [showJoinInput, setShowJoinInput] = useState(false)
 
-  const { connected, connecting, publicKey, connect, disconnect } = useWallet()
-
   const fetchMatches = async () => {
     setLoading(true)
     const { data } = await supabase
       .from('matches')
       .select('*')
       .eq('status', 'waiting')
+      .eq('is_private', false)
       .neq('player1_id', session?.user.id ?? '')
       .order('created_at', { ascending: false })
     setMatches((data as Match[]) ?? [])
@@ -152,7 +150,7 @@ export default function HomeTab() {
             onPress={() => setShowJoinInput(!showJoinInput)}
             activeOpacity={0.8}
           >
-            <Text style={s.actionButtonText}>Join Match</Text>
+            <Text style={[s.actionButtonText, { color: theme.text }]}>Join Match</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[s.actionButton, s.createMatchBtn]}
@@ -266,7 +264,7 @@ const makeStyles = (theme: any) => StyleSheet.create({
   },
   actionButtonText: {
     fontFamily: 'CabinetGrotesk',
-    color: '#fff',
+    color: "white",
     fontSize: 18,
 
     letterSpacing: 1,

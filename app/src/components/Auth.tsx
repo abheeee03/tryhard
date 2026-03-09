@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import {
     View, Text, TextInput, TouchableOpacity, StyleSheet,
-    KeyboardAvoidingView, Platform, ActivityIndicator, Animated
+    KeyboardAvoidingView, Platform, ActivityIndicator, Alert,
+    Image
 } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { useTheme } from '../context/ThemeContext'
@@ -10,22 +11,42 @@ export default function Auth() {
     const { theme } = useTheme()
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [username, setUsername] = useState('')
     const [loading, setLoading] = useState(false)
     const [isSignUp, setIsSignUp] = useState(false)
     const [error, setError] = useState('')
 
-    const scaleAnim = React.useRef(new Animated.Value(1)).current
-
-    const pressIn = () => Animated.spring(scaleAnim, { toValue: 0.96, useNativeDriver: true }).start()
-    const pressOut = () => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start()
-
     async function handleSubmit() {
         setLoading(true)
         setError('')
+
         if (isSignUp) {
-            const { data: { session }, error: e } = await supabase.auth.signUp({ email, password })
-            if (e) setError(e.message)
-            else if (!session) setError('Check your inbox for a verification email!')
+            if (!username.trim()) {
+                setError('Username is required')
+                setLoading(false)
+                return
+            }
+
+            const { data, error: e } = await supabase.auth.signUp({ email, password })
+            if (e) {
+                setError(e.message)
+            } else if (data.user) {
+                // Insert into profiles table
+                const { error: profileError } = await supabase.from('profiles').upsert({
+                    id: data.user.id,
+                    username: username.trim()
+                })
+
+                if (profileError) {
+                    console.error('Profile creation error:', profileError)
+                }
+
+                Alert.alert(
+                    'Verify Email',
+                    'Please check your email for a confirmation link and login again using the same credentials.',
+                    [{ text: 'OK', onPress: () => setIsSignUp(false) }]
+                )
+            }
         } else {
             const { error: e } = await supabase.auth.signInWithPassword({ email, password })
             if (e) setError(e.message)
@@ -33,201 +54,198 @@ export default function Auth() {
         setLoading(false)
     }
 
-    const s = makeStyles(theme)
-
     return (
-        <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <View style={s.decorativeCircle} />
-            <View style={s.decorativeBox} />
+        <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={styles.content}>
 
-            <View style={s.header}>
-                <Text style={s.logo}>⚔</Text>
-                <Text style={s.title}>TRYHARD</Text>
-                <Text style={s.subtitle}>PVP TRIVIA RUN ON SOLANA</Text>
-            </View>
-
-            <View style={s.card}>
-                <Text style={s.cardTitle}>{isSignUp ? 'CREATE ACCOUNT' : 'LOGIN'}</Text>
-
-                {error ? <Text style={s.errorText}>{error}</Text> : null}
-
-                <View style={s.inputGroup}>
-                    <Text style={s.label}>EMAIL ADDRESS</Text>
-                    <TextInput
-                        style={s.input}
-                        value={email}
-                        onChangeText={setEmail}
-                        placeholder="PLAYER@DOMAIN.COM"
-                        placeholderTextColor={theme.textSecondary}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                    />
+                {/* Header Section */}
+                <View style={styles.headerContainer}>
+                    <Text style={styles.title}>Connect with TryHard</Text>
+                    <Text style={styles.subtitle}>
+                        {isSignUp
+                            ? "Create an account to track your stats and compete."
+                            : "Start by entering your credentials"}
+                    </Text>
                 </View>
 
-                <View style={s.inputGroup}>
-                    <Text style={s.label}>SECURE PASSWORD</Text>
-                    <TextInput
-                        style={s.input}
-                        value={password}
-                        onChangeText={setPassword}
-                        placeholder="••••••••"
-                        placeholderTextColor={theme.textSecondary}
-                        secureTextEntry
-                        autoCapitalize="none"
-                    />
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+                {/* Form Section */}
+                <View style={styles.formContainer}>
+                    {isSignUp && (
+                        <View style={styles.inputGroup}>
+                            <Text style={styles.label}>Username</Text>
+                            <TextInput
+                                style={styles.input}
+                                value={username}
+                                onChangeText={setUsername}
+                                placeholder="Enter username"
+                                placeholderTextColor="#666666"
+                                autoCapitalize="none"
+                            />
+                        </View>
+                    )}
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Email</Text>
+                        <TextInput
+                            style={styles.input}
+                            value={email}
+                            onChangeText={setEmail}
+                            placeholder="Enter email"
+                            placeholderTextColor="#666666"
+                            keyboardType="email-address"
+                            autoCapitalize="none"
+                        />
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <View style={styles.passwordHeader}>
+                            <Text style={styles.label}>Password</Text>
+                            {!isSignUp && (
+                                <TouchableOpacity>
+                                    <Text style={styles.forgotPassword}>Forgot Password?</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                        <TextInput
+                            style={styles.input}
+                            value={password}
+                            onChangeText={setPassword}
+                            placeholder="Enter password"
+                            placeholderTextColor="#666666"
+                            secureTextEntry
+                            autoCapitalize="none"
+                        />
+                    </View>
                 </View>
 
-                <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-                    <TouchableOpacity
-                        style={s.primaryBtn}
-                        onPress={handleSubmit}
-                        onPressIn={pressIn}
-                        onPressOut={pressOut}
-                        disabled={loading}
-                        activeOpacity={0.9}
-                    >
-                        {loading
-                            ? <ActivityIndicator color="#fff" />
-                            : <Text style={s.primaryBtnText}>{isSignUp ? 'JOIN THE ARENA' : 'ENTER MATCH'}</Text>
-                        }
-                    </TouchableOpacity>
-                </Animated.View>
+                {/* Submit Action */}
+                <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={handleSubmit}
+                    disabled={loading}
+                    activeOpacity={0.8}
+                >
+                    {loading
+                        ? <ActivityIndicator color="#000000" />
+                        : <Text style={styles.primaryBtnText}>{isSignUp ? 'Sign Up' : 'Sign In'}</Text>
+                    }
+                </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => { setIsSignUp(!isSignUp); setError('') }} style={s.switchWrapper}>
-                    <Text style={s.switchText}>
-                        {isSignUp ? 'ALREADY REGISTERED? ' : "NEW CHALLENGER? "}
-                        <Text style={s.switchLink}>{isSignUp ? 'LOG IN' : 'SIGN UP'}</Text>
+                {/* Switch Mode */}
+                <TouchableOpacity onPress={() => { setIsSignUp(!isSignUp); setError(''); setPassword('') }} style={styles.switchWrapper}>
+                    <Text style={styles.switchText}>
+                        {isSignUp ? 'Already have an account? ' : "Don't have an account? "}
+                        <Text style={styles.switchLink}>{isSignUp ? 'Sign in' : 'Sign up'}</Text>
                     </Text>
                 </TouchableOpacity>
+
             </View>
         </KeyboardAvoidingView>
     )
 }
 
-const makeStyles = (theme: any) => StyleSheet.create({
+const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#0F172A', // Extremely dark blue slate to make blue-500 pop
+        backgroundColor: '#0A0A0A', // Deep dark matching the image
+    },
+    content: {
+        flex: 1,
+        paddingHorizontal: 24,
         justifyContent: 'center',
-        padding: 24,
     },
-    decorativeCircle: {
-        position: 'absolute', width: 300, height: 300, borderRadius: 150, backgroundColor: '#3B82F6', opacity: 0.1, top: -100, right: -50,
-    },
-    decorativeBox: {
-        position: 'absolute', width: 200, height: 200, backgroundColor: '#3B82F6', opacity: 0.05, bottom: -50, left: -50, transform: [{ rotate: '45deg' }]
-    },
-    header: {
+    logoContainer: {
+        flexDirection: 'row',
         alignItems: 'center',
-        marginBottom: 48,
+        justifyContent: 'center',
+        marginBottom: 60,
     },
-    logo: {
-        fontSize: 64,
-        marginBottom: 16,
-        color: '#3B82F6'
+    logoText: {
+        fontFamily: 'CabinetGrotesk',
+        fontWeight: "100",
+        fontSize: 28,
+        color: '#FFFFFF',
+        marginLeft: 10,
+    },
+    headerContainer: {
+        marginBottom: 32,
     },
     title: {
         fontFamily: 'CabinetGrotesk',
-        fontSize: 48,
-        fontWeight: '900',
-        color: '#FFF',
-        letterSpacing: 8,
-        textAlign: 'center'
+        fontSize: 24,
+        color: '#FFFFFF',
+        marginBottom: 8,
     },
     subtitle: {
         fontFamily: 'CabinetGrotesk',
         fontSize: 14,
-        fontWeight: '800',
-        color: '#3B82F6',
-        letterSpacing: 4,
-        marginTop: 8,
-    },
-    card: {
-        backgroundColor: theme.surface,
-        borderRadius: 24,
-        padding: 32,
-        borderWidth: 2,
-        borderColor: '#3B82F6',
-        shadowColor: '#3B82F6',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.2,
-        shadowRadius: 16,
-    },
-    cardTitle: {
-        fontFamily: 'CabinetGrotesk',
-        fontSize: 28,
-        fontWeight: '900',
-        color: theme.text,
-        marginBottom: 24,
-        textAlign: 'center',
-        letterSpacing: 2,
+        color: '#A1A1AA',
+        lineHeight: 20,
     },
     errorText: {
         fontFamily: 'CabinetGrotesk',
-        color: theme.danger,
+        color: '#EF4444',
         fontSize: 14,
-        fontWeight: '800',
-        textAlign: 'center',
         marginBottom: 16,
-        backgroundColor: 'rgba(255, 71, 87, 0.1)',
+        backgroundColor: 'rgba(239, 68, 68, 0.1)',
         padding: 12,
         borderRadius: 8,
-        borderWidth: 1,
-        borderColor: theme.danger,
+    },
+    formContainer: {
+        marginBottom: 32,
     },
     inputGroup: {
-        marginBottom: 24,
+        marginBottom: 20,
+    },
+    passwordHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
     },
     label: {
         fontFamily: 'CabinetGrotesk',
+        fontSize: 14,
+        color: '#E4E4E7',
+        marginBottom: 8,
+    },
+    forgotPassword: {
+        fontFamily: 'CabinetGrotesk',
         fontSize: 12,
-        fontWeight: '900',
-        color: theme.textSecondary,
-        letterSpacing: 2,
-        marginBottom: 10,
+        color: '#A1A1AA',
     },
     input: {
         fontFamily: 'CabinetGrotesk',
-        backgroundColor: theme.bg,
-        borderWidth: 2,
-        borderColor: theme.border,
-        borderRadius: 16,
-        padding: 18,
-        color: theme.text,
-        fontSize: 18,
-        fontWeight: '700',
-        letterSpacing: 1,
+        backgroundColor: '#18181B',
+        borderRadius: 12,
+        padding: 16,
+        color: '#FFFFFF',
+        fontSize: 16,
     },
     primaryBtn: {
-        backgroundColor: '#3B82F6',
-        borderRadius: 16,
-        paddingVertical: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        paddingVertical: 18,
         alignItems: 'center',
-        marginTop: 12,
-        marginBottom: 24,
-        shadowColor: '#3B82F6',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
+        marginBottom: 32,
     },
     primaryBtnText: {
         fontFamily: 'CabinetGrotesk',
-        color: '#fff',
-        fontWeight: '900',
-        fontSize: 18,
-        letterSpacing: 2,
+        color: '#000000',
+        fontSize: 16,
     },
-    switchWrapper: { paddingVertical: 8 },
+    switchWrapper: {
+        alignItems: 'center',
+        paddingVertical: 8,
+    },
     switchText: {
         fontFamily: 'CabinetGrotesk',
-        textAlign: 'center',
-        color: theme.textSecondary,
+        color: '#A1A1AA',
         fontSize: 14,
-        fontWeight: '800',
-        letterSpacing: 1,
     },
     switchLink: {
-        color: '#3B82F6',
-        fontWeight: '900',
+        color: '#FFFFFF',
     },
 })

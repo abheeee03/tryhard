@@ -14,24 +14,25 @@ export default function TabLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: theme.surface,
-          borderTopWidth: 1,
-          borderTopColor: theme.border,
-          elevation: 0,
-          shadowOpacity: 0,
-          height: Platform.OS === 'ios' ? 88 : 70 + insets.bottom,
-          paddingBottom: Platform.OS === 'ios' ? 24 : insets.bottom + 10,
+          backgroundColor: '#1E1E1E', // Dark pill background
+          borderTopWidth: 0,
+          elevation: 10,
+          shadowOpacity: 0.3,
+          shadowRadius: 15,
+          shadowOffset: { width: 0, height: 10 },
+          shadowColor: '#000',
+          position: 'absolute',
+          bottom: Platform.OS === 'ios' ? 30 : insets.bottom + 10,
+          height: 60,
+          borderRadius: 36,
+          paddingBottom: 0,
+          marginLeft: 10,
+          marginRight: 10,
           paddingTop: 10,
         },
-        tabBarShowLabel: true,
-        tabBarLabelStyle: {
-          fontFamily: 'CabinetGrotesk',
-          fontWeight: '800',
-          fontSize: 11,
-          marginTop: 4,
-        },
-        tabBarActiveTintColor: '#3B82F6',
-        tabBarInactiveTintColor: theme.textSecondary,
+        tabBarShowLabel: false, // Hide labels for minimal look
+        tabBarActiveTintColor: '#3B82F6', // Blue-500 active icon
+        tabBarInactiveTintColor: '#FFFFFF', // White icons when inactive
       }}
     >
       <Tabs.Screen
@@ -39,7 +40,9 @@ export default function TabLayout() {
         options={{
           title: "Home",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "home" : "home-outline"} size={26} color={color} />
+            <View style={[styles.iconWrapper, focused && styles.iconActive]}>
+              <Ionicons name={focused ? "home" : "home-outline"} size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -49,7 +52,9 @@ export default function TabLayout() {
         options={{
           title: "Matches",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "layers" : "layers-outline"} size={26} color={color} />
+            <View style={[styles.iconWrapper, focused && styles.iconActive]}>
+              <Ionicons name={focused ? "cube" : "cube-outline"} size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -59,7 +64,9 @@ export default function TabLayout() {
         options={{
           title: "Profile",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "person" : "person-outline"} size={26} color={color} />
+            <View style={[styles.iconWrapper, focused && styles.iconActive]}>
+              <Ionicons name={focused ? "person" : "person-outline"} size={24} color={color} />
+            </View>
           ),
         }}
       />
@@ -68,23 +75,19 @@ export default function TabLayout() {
 }
 
 const styles = StyleSheet.create({
-  createTabContainer: {
-    top: -15, // Lift the button up
+  iconWrapper: {
+    width: 50,
+    height: 50,
+    borderRadius: 30,
     justifyContent: "center",
     alignItems: "center",
   },
-  createTabInner: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#3B82F6", // Consistent blue-500
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#3B82F6",
+  iconActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.2,
     shadowRadius: 8,
-    borderWidth: 4,
-    borderColor: '#1A1A2E' // matches Dark surface, ideally dynamic but fine for now
+    // elevation: 5,
   }
 });

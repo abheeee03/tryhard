@@ -9,7 +9,7 @@ function generateMatchCode(): string {
 }
 
 export const createMatchDemo = async (req: Request, res: Response) => {
-    const { time_per_que, category, total_questions, stake_amount, difficulty, player1_wallet } = req.body;
+    const { time_per_que, category, total_questions, stake_amount, difficulty, player1_wallet, is_private } = req.body;
     const { userID } = req;
     try {
         const matchCode = generateMatchCode();
@@ -24,6 +24,7 @@ export const createMatchDemo = async (req: Request, res: Response) => {
             stake_amount, // Still tracking this visually but we know it's unverified SOL
             match_code: matchCode,
             player1_wallet: player1_wallet ?? null, 
+            is_private: is_private ?? false,
         }).select().single()
 
         if (error || !data) {
