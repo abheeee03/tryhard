@@ -222,12 +222,7 @@ export default function CreateMatchScreen() {
                     </View>
                 )}
 
-                {status && (
-                    <View style={s.statusCard}>
-                        <ActivityIndicator size="small" color={theme.accent} />
-                        <Text style={s.statusText}>{status}</Text>
-                    </View>
-                )}
+
 
                 <View style={s.privateToggleRow}>
                     <View>
@@ -248,7 +243,12 @@ export default function CreateMatchScreen() {
                         onPressOut={() => Animated.spring(btnScale, { toValue: 1, useNativeDriver: true }).start()}
                         disabled={loading} activeOpacity={0.9}>
                         {loading
-                            ? <ActivityIndicator color="#fff" />
+                            ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                    <ActivityIndicator color="#fff" />
+                                    <Text style={s.createBtnText}>{status ? status.toUpperCase() : 'LOADING...'}</Text>
+                                </View>
+                            )
                             : <Text style={s.createBtnText}>CREATE BATTLE ⚔</Text>
                         }
                     </TouchableOpacity>

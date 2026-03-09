@@ -25,6 +25,7 @@ export const createMatchDemo = async (req: Request, res: Response) => {
             match_code: matchCode,
             player1_wallet: player1_wallet ?? null, 
             is_private: is_private ?? false,
+            status: stake_amount > 0 ? 'funding' : 'waiting'
         }).select().single()
 
         if (error || !data) {
@@ -70,9 +71,15 @@ export const confirmDepositDemo = async (req: Request, res: Response) => {
 
     try {
         const column = role === "player1" ? "player1_deposit_tx" : "player2_deposit_tx";
+        
+        const updatePayload: any = { [column]: txSignature };
+        if (role === "player1") {
+            updatePayload.status = "waiting";
+        }
+
         const { error: updateErr } = await supabase
             .from("matches")
-            .update({ [column]: txSignature })
+            .update(updatePayload)
             .eq("id", matchId);
 
         if (updateErr) {

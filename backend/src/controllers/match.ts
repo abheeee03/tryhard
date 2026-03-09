@@ -24,6 +24,7 @@ export const createMatch = async (req: Request, res: Response) => {
             match_code: matchCode,
             player1_wallet: player1_wallet ?? null,
             is_private: is_private ?? false,
+            status: stake_amount > 0 ? 'funding' : 'waiting'
         }).select().single()
         if (error || !data) {
             console.log("[match] Error while creating room: ", error);

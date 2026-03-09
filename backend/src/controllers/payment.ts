@@ -40,10 +40,17 @@ export const confirmDeposit = async (req: Request, res: Response) => {
         }
 
         // Update the match row with the deposit tx
+        // Update the match row with the deposit tx and advance status to waiting if it was player1 funding
         const column = role === "player1" ? "player1_deposit_tx" : "player2_deposit_tx";
+        
+        const updatePayload: any = { [column]: txSignature };
+        if (role === "player1") {
+            updatePayload.status = "waiting";
+        }
+
         const { error: updateErr } = await supabase
             .from("matches")
-            .update({ [column]: txSignature })
+            .update(updatePayload)
             .eq("id", matchId);
 
         if (updateErr) {

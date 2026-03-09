@@ -255,6 +255,36 @@ const processActiveMatches = async () => {
         // doesn't eat into the player's answer time
         if (elapsed >= match.question_duration_seconds + INTER_QUESTION_BUFFER_SECONDS) {
             await advanceMatch(match);
+            continue;
+        }
+
+        // Short-circuit: if both players have answered the current question, advance immediately!
+        // This prevents the game from getting stuck on the final question if both players answer quickly.
+        const { count: answerCount } = await supabase
+            .from("match_answers")
+            .select("*", { count: "exact", head: true })
+            .eq("match_id", match.id)
+            .eq("question_id", match.current_question_index.toString()); // Wait, question_id is a UUID, not the index.
+            
+        // Let's fetch the actual question UUID for the current index.
+        const { data: currentQue } = await supabase
+            .from("match_questions")
+            .select("id")
+            .eq("match_id", match.id)
+            .eq("question_index", match.current_question_index)
+            .single();
+
+        if (currentQue) {
+            const { count: ansCount } = await supabase
+                .from("match_answers")
+                .select("*", { count: "exact", head: true })
+                .eq("match_id", match.id)
+                .eq("question_id", currentQue.id);
+
+            if (ansCount !== null && ansCount >= 2) {
+                console.log(`[engine] Both players answered q=${match.current_question_index} in match=${match.id}. Advancing early.`);
+                await advanceMatch(match);
+            }
         }
     }
 }

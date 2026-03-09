@@ -153,11 +153,25 @@ export default function GameScreen() {
     useEffect(() => {
         if (phase !== 'question' || !questionPhaseStart || !match) return
         setTimeLeft(match.question_duration_seconds)
-        const interval = setInterval(() => {
+        let didFireFallback = false
+        const interval = setInterval(async () => {
             const elapsed = (Date.now() - questionPhaseStart) / 1000
             const remaining = Math.max(0, match.question_duration_seconds - elapsed)
             setTimeLeft(Math.ceil(remaining))
             timerColor.setValue(remaining / match.question_duration_seconds)
+
+            // Fallback watchdog: if time is up on the last question, forcing a fetch
+            // just in case the Realtime 'finished' event was dropped.
+            if (remaining === 0 && match.current_question_index === match.total_questions - 1 && !didFireFallback) {
+                didFireFallback = true
+                setTimeout(async () => {
+                    const { data } = await supabase.from('matches').select('*').eq('id', matchId).single()
+                    if (data && data.status === 'finished') {
+                        setMatch(data as Match)
+                        router.replace('/result')
+                    }
+                }, 2000)
+            }
         }, 200)
         return () => clearInterval(interval)
     }, [phase, match?.current_question_index, questionPhaseStart])
