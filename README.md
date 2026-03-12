@@ -21,65 +21,90 @@ pass: `test@user.com` <br>
 
 ## 🏗️ Architecture Overview
 
-The system runs on a deeply integrated stack connecting a Mobile App front-end to a centralized Node.js Game Server, governed by a trustless Solana Smart Contract (`program`) that handles the financial stakes in escrow.
+The system is built on an **event-driven architecture**. The mobile clients do **not** have a persistent WebSocket connection to the Node.js server. Instead, all live game state is driven by **Supabase Realtime** (`postgres_changes`), which fans out database row updates to every subscribed client instantly.
 
 ```mermaid
 graph TD
     %% Entities
-    ClientA[Mobile App - Player 1]
-    ClientB[Mobile App - Player 2]
-    Web[Next.js Landing Page]
-    
-    Server[Node.js Game Server]
-    Supabase[(Supabase DB)]
-    
-    Blockchain[Solana Blockchain]
-    Program[Anchor Escrow Program]
+    ClientA["📱 Mobile App – Player 1"]
+    ClientB["📱 Mobile App – Player 2"]
+    Web["🌐 Next.js Landing Page"]
+    Server["⚙️ Node.js Game Engine"]
+    Supabase[("🗄️ Supabase\n(PostgreSQL + Realtime)")]
+    Program["📜 Anchor Escrow Program"]
+    Blockchain["⛓️ Solana Blockchain"]
 
-    %% Connections
-    ClientA <-->|HTTP / WebSockets| Server
-    ClientB <-->|HTTP / WebSockets| Server
-    
-    Server <-->|PostgreSQL CRUD| Supabase
-    
-    ClientA -.->|On-Chain Deposits| Program
-    ClientB -.->|On-Chain Deposits| Program
-    
-    Server -->|Rpc Validation & Payout Authority| Program
+    %% REST Actions — client talks to backend only for triggered actions
+    ClientA -->|"REST: create match / join / start / submit answer"| Server
+    ClientB -->|"REST: join / submit answer"| Server
+
+    %% Backend manages all match state in Supabase DB
+    Server -->|"Write match state\n(status, current_question_index, scores)"| Supabase
+
+    %% Game Engine ticks every 1s — advances question and finishes match
+    Server -->|"1s engine tick:\nadvance question / finish match"| Supabase
+
+    %% Clients subscribe directly to Supabase Realtime — no backend WS needed
+    Supabase -->|"🔴 Realtime postgres_changes:\nstatus=starting➜active➜finished,\ncurrent_question_index"| ClientA
+    Supabase -->|"🔴 Realtime postgres_changes:\nsame subscription"| ClientB
+
+    %% On-chain escrow
+    ClientA -.->|"On-chain deposit (SOL)"| Program
+    ClientB -.->|"On-chain deposit (SOL)"| Program
+    Server -->|"RPC: resolve / draw escrow\n(payout authority only)"| Program
     Program --- Blockchain
-    
-    Web -->|Marketing & Download Links| ClientA
+
+    %% Website
+    Web -->|Download / promo| ClientA
 ```
+
+### 🎮 Game Flow (Step by Step)
+
+| Step | Who | What Happens |
+|---|---|---|
+| 1 | Player 1 | Calls `POST /match/create` on the backend. Match is created with `status=waiting` (or `status=funding` if staked). |
+| 2 | Player 1 | If staked, signs a Solana tx to deposit SOL into the on-chain escrow PDA. Backend verifies tx and flips `status=waiting`. |
+| 3 | Player 2 | Finds the match (public feed or 6-digit code). Calls `POST /match/:id/join`. Backend sets `status=ready`. |
+| 4 | Both clients | **Supabase Realtime** fires a `postgres_changes UPDATE` event — both clients receive the `status=ready` update instantly in the Waiting Room. |
+| 5 | Player 2 | If staked, signs and sends their escrow deposit tx. Backend verifies it. |
+| 6 | Player 1 | Calls `POST /match/:id/start`. Backend sets `status=starting` and `started_at`. |
+| 7 | Both clients | **Supabase Realtime** fires — both clients receive `status=starting` and show the 5-second pre-game countdown. |
+| 8 | Backend Engine | 1-second polling loop detects the countdown has elapsed. Sets `status=active`, `current_question_index=0`, `question_start_time`. |
+| 9 | Both clients | **Supabase Realtime** fires — clients receive `status=active` and enter the question phase, showing an interlude then the first question. |
+| 10 | Both players | Answer questions by calling `POST /match/:id/answer`. Answers are stored in `match_answers`. |
+| 11 | Backend Engine | Each tick, checks if both players answered OR time expired. If so, increments `current_question_index` (or finishes the match). |
+| 12 | Both clients | **Supabase Realtime** fires on each `current_question_index` change → interlude countdown → next question shown. |
+| 13 | Backend Engine | After last question, scores are tallied. `status=finished`, `winner_id` are written. If staked, escrow is resolved on-chain. |
+| 14 | Both clients | **Supabase Realtime** fires `status=finished` → both clients are automatically navigated to the Results screen. |
 
 ## 📂 Project Structure
 
 ### `/app`
 **The Mobile Application (Front-End)**
-Built using **React Native (Expo)**, this is the core client application players install on their mobile devices (iOS/Android). 
-- **Stack:** Expo, React Native, Expo Router, Zustand (State Management)
-- **Features:** Wallet-Adapter integration (Phantom/Solflare), Real-time WebSocket subscriptions to Supabase, brutalist UI built with a unified `Blue-500` aesthetic and `CabinetGrotesk` typography.
-- **Run Locally:** `cd app` -> `npm install` -> `npx expo start`
+Built using **React Native (Expo)**, this is the core client application players install on their devices (iOS/Android).
+- **Stack:** Expo, Expo Router, React Native, Zustand, Supabase JS Client
+- **Real-time:** Uses `supabase.channel().on('postgres_changes', ...)` directly — no backend WebSocket. All game phases (`waiting`, `ready`, `starting`, `active`, `finished`) and question advancement are driven by Supabase Realtime events.
+- **Run Locally:** `cd app` → `npm install` → `npx expo start`
 
 ### `/backend`
 **The Game Engine & Authority Server**
-A **Node.js (Express)** backend responsible for managing match states, generating Trivia questions via AI, and acting as the secure authority for the Solana Escrow program.
-- **Stack:** Express, Supabase JS, Solana Web3.js, Google Generative AI (Gemini).
-- **Features:** JWT authentication, Match validation, and triggering the final "Payout" instruction on the smart contract once a winner is decided.
-- **Run Locally:** `cd backend` -> `pnpm install` -> `pnpm dev`
+A **Node.js (Express)** server responsible for match lifecycle management, AI question generation, and Solana escrow authority.
+- **Stack:** Express, Supabase JS (server-side), Solana Web3.js, Google Generative AI (Gemini)
+- **Game Engine:** A `setInterval` tick runs every **1 second**, polling `status=starting` and `status=active` matches from Supabase. It advances `current_question_index`, calculates final scores, and marks matches `finished`. Clients react to these DB changes via Realtime.
+- **Run Locally:** `cd backend` → `pnpm install` → `pnpm dev`
 
 ### `/program`
 **The Solana Smart Contract (Escrow)**
 Written in **Rust (Anchor Framework)**, this on-chain program guarantees trustless financial wagers.
-- **Stack:** Rust, Anchor.
-- **Features:** Initializes a PDA (Program Derived Address) escrow account for matches. Accepts SOL deposits from Player 1 and Player 2. Only the designated `Backend Authority` keypair can instruct the contract to unlock and dispense funds to the winner.
-- **Run Locally:** `cd program` -> `anchor build` -> `anchor test`
+- **Stack:** Rust, Anchor
+- **Features:** Initializes a PDA escrow for each match. The backend is the sole authority that can resolve (pay winner) or draw (refund both) the escrow. Players deposit directly via the mobile app.
+- **Run Locally:** `cd program` → `anchor build` → `anchor test`
 
 ### `/website`
 **The Promotional Landing Page**
-A lightning-fast **Next.js** web application highlighting the game's features.
-- **Stack:** Next.js 15+, Tailwind CSS v4, React 19.
-- **Features:** Promotional UI and App Download routing. 
-- **Run Locally:** `cd website` -> `npm install` -> `npm run dev`
+A **Next.js** web application serving as the public-facing marketing and download page.
+- **Stack:** Next.js 15+, Tailwind CSS v4, React 19
+- **Run Locally:** `cd website` → `npm install` → `npm run dev`
 
 ---
 
