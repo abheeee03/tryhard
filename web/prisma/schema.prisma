@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id          String   @id @default(cuid())
+  wallet      String   @unique
+  username    String?
+  createdAt   DateTime @default(now())
+
+  matchesCreated Match[] @relation("creator")
+  wonMatches     Match[]
+  matchPlayers   MatchPlayer[]
+  answers        Answer[]
+  transactions   Transaction[]
+}
+
+model Match {
+  id            String   @id @default(cuid())
+  creatorId     String
+  creator       User @relation("creator", fields: [creatorId], references: [id])
+
+  stakeAmount   Float
+  totalPlayers  Int      @default(2)
+  questionCount Int      // 5, 10, 15
+  timePerQ      Int      // seconds per question
+
+  status        MatchStatus @default(WAITING)
+  startedAt     DateTime?
+  endedAt       DateTime?
+
+  winnerId      String?
+  winner        User? @relation(fields: [winnerId], references: [id])
+
+  questions     Question[]
+  players       MatchPlayer[]
+
+  createdAt     DateTime @default(now())
+}
+
+model MatchPlayer {
+  id        String   @id @default(cuid())
+
+  userId    String
+  matchId   String
+
+  user      User    @relation(fields: [userId], references: [id])
+  match     Match   @relation(fields: [matchId], references: [id])
+
+  score     Int     @default(0)
+  joinedAt  DateTime @default(now())
+
+  @@unique([userId, matchId])
+}
+
+model Question {
+  id          String   @id @default(cuid())
+  matchId     String
+  match       Match    @relation(fields: [matchId], references: [id])
+
+  question    String
+  options     Json     // ["A", "B", "C", "D"]
+  correctAns  String
+
+  order       Int      // question sequence
+  createdAt   DateTime @default(now())
+
+  answers     Answer[]
+}
+
+model Answer {
+  id          String   @id @default(cuid())
+
+  userId      String
+  questionId  String
+
+  user        User      @relation(fields: [userId], references: [id])
+  question    Question  @relation(fields: [questionId], references: [id])
+
+  selected    String
+  isCorrect   Boolean
+  timeTaken   Int       // ms or seconds
+
+  createdAt   DateTime  @default(now())
+
+  @@unique([questionId])
+}
+
+model Transaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  matchId   String?
+  amount    Float
+  type      TxType
+
+  signature String?  // Solana tx hash
+
+  createdAt DateTime @default(now())
+  
+}
+
+enum MatchStatus {
+  WAITING
+  STARTED
+  FINISHED
+  INGAME
+}
+
+enum TxType {
+  STAKE
+  REWARD
+  DRAW
+}
