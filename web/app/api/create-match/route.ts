@@ -29,7 +29,7 @@ type RawGeneratedQuestion = {
 
 
 const AI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview";
-const geminiApiKey = "AIzaSyB9AwupV2mR698i8bvWlFgKKEFIIf8Omho";
+const geminiApiKey = process.env.GEMINI_API_KEY;
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
 const INVITE_CODE_BYTES = 4;
 const MAX_INVITE_CODE_ATTEMPTS = 5;
