@@ -1,6 +1,7 @@
+import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { MatchStatus } from "@/app/generated/prisma/client";
+import { MatchStatus, Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type CreateMatchBody = {
@@ -27,9 +28,32 @@ type RawGeneratedQuestion = {
 };
 
 
-const AI_MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-const geminiApiKey = process.env.GEMINI_API_KEY;
+const AI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-flash-lite-preview";
+const geminiApiKey = "AIzaSyB9AwupV2mR698i8bvWlFgKKEFIIf8Omho";
 const ai = geminiApiKey ? new GoogleGenAI({ apiKey: geminiApiKey }) : null;
+const INVITE_CODE_BYTES = 4;
+const MAX_INVITE_CODE_ATTEMPTS = 5;
+
+const generateInviteCode = () =>
+    crypto.randomBytes(INVITE_CODE_BYTES).toString("hex").toUpperCase();
+
+const createUniqueInviteCode = async (
+    tx: Prisma.TransactionClient
+): Promise<string> => {
+    for (let attempt = 0; attempt < MAX_INVITE_CODE_ATTEMPTS; attempt += 1) {
+        const inviteCode = generateInviteCode();
+        const existing = await tx.match.findUnique({
+            where: { inviteCode },
+            select: { id: true },
+        });
+
+        if (!existing) {
+            return inviteCode;
+        }
+    }
+
+    throw new Error("Failed to generate invite code");
+};
 
 const normalizeGeneratedQuestions = (
     payload: unknown,
@@ -286,10 +310,13 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const match = await prisma.$transaction(async (tx) => {
+        const match = await prisma.$transaction(
+            async (tx) => {
+            const inviteCode = await createUniqueInviteCode(tx);
             const createdMatch = await tx.match.create({
                 data: {
                     creatorId: resolvedCreatorId,
+                    inviteCode,
                     stakeAmount,
                     totalPlayers,
                     questionCount,
@@ -316,7 +343,12 @@ export async function POST(req: NextRequest) {
             });
 
             return createdMatch;
-        });
+            },
+            {
+                maxWait: 10000,
+                timeout: 20000,
+            }
+        );
 
         console.log(`[match] Match created: id=${match.id}, stake=${stakeAmount}`);
 
