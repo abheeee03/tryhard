@@ -17,8 +17,10 @@ type RoomInfo = {
   inviteCode: string;
   status: string;
   totalPlayers: number;
+  currentPlayers: number;
   questionCount: number;
   timePerQ: number;
+  stakeAmount: number;
   creatorId: string;
 };
 
@@ -41,11 +43,18 @@ type IntermissionPayload = {
   startsAt: number | null;
 };
 
+type UserAnswerDetail = {
+  questionId: string;
+  selected: string;
+  isCorrect: boolean;
+};
+
 type ScoreEntry = {
   userId: string;
   username: string | null;
   wallet: string;
   score: number;
+  answers: UserAnswerDetail[];
 };
 
 type FinishedPayload = {
@@ -55,7 +64,7 @@ type FinishedPayload = {
 };
 
 type AnswerResponse =
-  | { ok: true; data: { correct: boolean; score: number } }
+  | { ok: true; data?: { correct: boolean; score: number } }
   | { ok: false; error: string };
 
 type EnsureUserResponse =
@@ -81,6 +90,7 @@ export default function RoomPage() {
   }, [params.inviteCode]);
 
   const [user, setUser] = useState<UserRecord | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [ensureStatus, setEnsureStatus] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle");
@@ -113,10 +123,16 @@ export default function RoomPage() {
   const isCreator = room?.creatorId && user?.id === room.creatorId;
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!walletAddress) {
-      setUser(null);
-      setEnsureStatus("idle");
-      setEnsureError("");
+      queueMicrotask(() => {
+        setUser(null);
+        setEnsureStatus("idle");
+        setEnsureError("");
+      });
       return;
     }
 
@@ -163,13 +179,17 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (!connected || !user?.id || !walletAddress || !inviteCode) {
-      setJoinStatus("idle");
-      setJoinError("");
+      queueMicrotask(() => {
+        setJoinStatus("idle");
+        setJoinError("");
+      });
       return;
     }
 
-    setJoinStatus("joining");
-    setJoinError("");
+    queueMicrotask(() => {
+      setJoinStatus("joining");
+      setJoinError("");
+    });
 
     const socket = io(wsUrl, { transports: ["websocket"] });
     socketRef.current = socket;
@@ -199,6 +219,22 @@ export default function RoomPage() {
       setQuestion(null);
       setAnswerFeedback(null);
     });
+
+    socket.on(
+      "room:player-joined",
+      (payload: { room?: RoomInfo; currentPlayers?: number }) => {
+        if (payload.room) {
+          setRoom(payload.room);
+          return;
+        }
+
+        if (typeof payload.currentPlayers === "number") {
+          setRoom((prev) =>
+            prev ? { ...prev, currentPlayers: payload.currentPlayers ?? 0 } : prev
+          );
+        }
+      }
+    );
 
     socket.on("room:question", (payload: QuestionPayload) => {
       setPhase("question");
@@ -242,7 +278,9 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (!question?.endsAt) {
-      setTimeLeftMs(null);
+      queueMicrotask(() => {
+        setTimeLeftMs(null);
+      });
       return;
     }
 
@@ -258,7 +296,9 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (!startsAt) {
-      setCountdownMs(null);
+      queueMicrotask(() => {
+        setCountdownMs(null);
+      });
       return;
     }
 
@@ -316,7 +356,7 @@ export default function RoomPage() {
             return;
           }
 
-          setAnswerFeedback(response.data.correct ? "Correct" : "Incorrect");
+          setAnswerFeedback("Answer submitted");
         }
       );
     },
@@ -331,9 +371,11 @@ export default function RoomPage() {
             Tryhard Arena
           </p>
           <h1 className="text-2xl font-semibold">Room {inviteCode}</h1>
-          <p className="text-sm text-white/60">Stake: confirmed (demo)</p>
+          <p className="text-sm text-white/60">
+            Stake: {room?.stakeAmount ?? 0} SOL confirmed (demo)
+          </p>
         </div>
-        <WalletMultiButton />
+        {mounted && <WalletMultiButton />}
       </header>
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-10">
@@ -361,6 +403,12 @@ export default function RoomPage() {
               <p className="text-sm text-white/60">Join status</p>
               <p className="text-base font-semibold">{joinStatus}</p>
               {joinError && <p className="text-xs text-red-400">{joinError}</p>}
+            </div>
+            <div>
+              <p className="text-sm text-white/60">Players</p>
+              <p className="text-base font-semibold">
+                {room ? `${room.currentPlayers}/${room.totalPlayers}` : "-"}
+              </p>
             </div>
           </div>
         </section>
@@ -461,32 +509,63 @@ export default function RoomPage() {
           )}
 
           {phase === "finished" && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-semibold">Match finished</h2>
-              {winners.length > 0 ? (
-                <p className="text-sm text-white/70">
-                  Winner{winners.length > 1 ? "s" : ""}: {" "}
-                  {winners
-                    .map((winner) => winner.username ?? winner.wallet)
-                    .join(", ")}
-                </p>
-              ) : (
-                <p className="text-sm text-white/70">No winner data.</p>
-              )}
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-2xl font-semibold">Match Finished</h2>
+                {winners.length > 0 ? (
+                  <p className="text-sm text-white/70">
+                    Winner{winners.length > 1 ? "s" : ""}: {" "}
+                    <span className="font-bold text-white">
+                      {winners
+                        .map((winner) => winner.username ?? winner.wallet)
+                        .join(", ")}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-sm text-white/70">No winner data.</p>
+                )}
+              </div>
 
               {leaderboard.length > 0 && (
-                <div className="mt-4 space-y-2">
+                <div className="space-y-4">
                   <p className="text-xs uppercase tracking-[0.3em] text-white/50">
-                    Leaderboard
+                    Final Standings & Answers
                   </p>
-                  <div className="space-y-2">
+                  <div className="grid gap-4">
                     {leaderboard.map((entry) => (
                       <div
                         key={entry.userId}
-                        className="flex items-center justify-between rounded-lg border border-white/10 px-4 py-2 text-sm"
+                        className="rounded-xl border border-white/10 bg-white/5 p-4"
                       >
-                        <span>{entry.username ?? entry.wallet}</span>
-                        <span className="text-white/60">{entry.score} pts</span>
+                        <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-3">
+                          <span className="font-semibold">
+                            {entry.username ?? entry.wallet}
+                            {entry.userId === user?.id && " (You)"}
+                          </span>
+                          <span className="text-lg font-bold text-white">
+                            {entry.score} pts
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                          {entry.answers?.map((ans, idx) => (
+                            <div
+                              key={idx}
+                              className={`flex flex-col rounded-lg px-3 py-2 text-[10px] uppercase tracking-tighter ${
+                                ans.isCorrect
+                                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
+                                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+                              }`}
+                            >
+                              <span className="opacity-60">Q{idx + 1}</span>
+                              <span className="truncate font-bold">
+                                {ans.isCorrect ? "Correct" : "Wrong"}
+                              </span>
+                              <span className="truncate opacity-80">
+                                {ans.selected}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>

@@ -90,7 +90,7 @@ model Answer {
 
   createdAt   DateTime  @default(now())
 
-  @@unique([questionId])
+  @@unique([userId, questionId])
 }
 
 model Transaction {

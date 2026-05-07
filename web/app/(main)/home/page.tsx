@@ -40,6 +40,7 @@ function Home() {
   );
 
   const [user, setUser] = useState<UserRecord | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [ensureStatus, setEnsureStatus] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle");
@@ -57,13 +58,19 @@ function Home() {
   const [joinError, setJoinError] = useState("");
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
     if (!walletAddress) {
-      setUser(null);
-      setEnsureStatus("idle");
-      setEnsureError("");
-      setCreateStatus("idle");
-      setCreateError("");
-      setCreatedInviteCode(null);
+      queueMicrotask(() => {
+        setUser(null);
+        setEnsureStatus("idle");
+        setEnsureError("");
+        setCreateStatus("idle");
+        setCreateError("");
+        setCreatedInviteCode(null);
+      });
       return;
     }
 
@@ -230,7 +237,7 @@ function Home() {
               room for your friends.
             </p>
           </div>
-          <WalletMultiButton />
+          {mounted && <WalletMultiButton />}
         </header>
 
         <section className="grid gap-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm sm:grid-cols-2">

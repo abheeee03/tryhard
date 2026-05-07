@@ -2,7 +2,11 @@ import "dotenv/config";
 import express from "express";
 import { createServer } from "node:http";
 import { Server } from "socket.io";
-import { MatchStatus, type MatchStatus as MatchStatusType } from "./generated/prisma/enums";
+import {
+  MatchStatus,
+  TxType,
+  type MatchStatus as MatchStatusType,
+} from "./generated/prisma/enums";
 import { prisma } from "./lib/prisma";
 
 const START_BUFFER_MS = 5000;
@@ -15,6 +19,7 @@ type MatchRow = {
   timePerQ: number;
   questionCount: number;
   totalPlayers: number;
+  stakeAmount: number;
   creatorId: string;
 };
 
@@ -40,6 +45,12 @@ type StoredQuestion = {
   correctAns: string;
 };
 
+type UserAnswerDetail = {
+  questionId: string;
+  selected: string;
+  isCorrect: boolean;
+};
+
 type RoomState = {
   matchId: string;
   inviteCode: string;
@@ -47,6 +58,7 @@ type RoomState = {
   timePerQ: number;
   questionCount: number;
   totalPlayers: number;
+  stakeAmount: number;
   currentIndex: number | null;
   startsAt: number | null;
   questionEndsAt: number | null;
@@ -56,6 +68,7 @@ type RoomState = {
   players: Map<string, UserRow>;
   scores: Map<string, number>;
   answers: Map<string, Set<string>>;
+  detailedAnswers: Map<string, UserAnswerDetail[]>;
 };
 
 type JoinRoomPayload = {
@@ -84,6 +97,13 @@ type ScoreEntry = {
   username: string | null;
   wallet: string;
   score: number;
+  answers: UserAnswerDetail[];
+};
+
+type MatchPlayerWithUser = {
+  userId: string;
+  score: number;
+  user: UserRow;
 };
 
 if (!process.env.DATABASE_URL) {
@@ -144,6 +164,7 @@ const fetchMatchByInvite = async (
       timePerQ: true,
       questionCount: true,
       totalPlayers: true,
+      stakeAmount: true,
       creatorId: true,
     },
   });
@@ -234,6 +255,35 @@ const ensureMatchPlayer = async (matchId: string, userId: string) => {
   });
 };
 
+const markStakePaid = async (
+  matchId: string,
+  userId: string,
+  amount: number
+) => {
+  const existingStake = await prisma.transaction.findFirst({
+    where: {
+      matchId,
+      userId,
+      type: TxType.STAKE,
+    },
+    select: { id: true },
+  });
+
+  if (existingStake) {
+    return;
+  }
+
+  await prisma.transaction.create({
+    data: {
+      matchId,
+      userId,
+      amount,
+      type: TxType.STAKE,
+      signature: "demo-stake-confirmed",
+    },
+  });
+};
+
 const countMatchPlayers = async (matchId: string): Promise<number> => {
   return prisma.matchPlayer.count({ where: { matchId } });
 };
@@ -254,6 +304,7 @@ const buildRoomState = (match: MatchRow): RoomState => ({
   timePerQ: match.timePerQ,
   questionCount: match.questionCount,
   totalPlayers: match.totalPlayers,
+  stakeAmount: match.stakeAmount,
   currentIndex: null,
   startsAt: null,
   questionEndsAt: null,
@@ -263,6 +314,45 @@ const buildRoomState = (match: MatchRow): RoomState => ({
   players: new Map(),
   scores: new Map(),
   answers: new Map(),
+  detailedAnswers: new Map(),
+});
+
+const fetchMatchPlayers = async (
+  matchId: string
+): Promise<MatchPlayerWithUser[]> => {
+  return prisma.matchPlayer.findMany({
+    where: { matchId },
+    select: {
+      userId: true,
+      score: true,
+      user: {
+        select: { id: true, wallet: true, username: true },
+      },
+    },
+    orderBy: { joinedAt: "asc" },
+  });
+};
+
+const hydrateRoomPlayers = async (room: RoomState) => {
+  const players = await fetchMatchPlayers(room.matchId);
+
+  players.forEach((player) => {
+    room.players.set(player.userId, player.user);
+    if (!room.scores.has(player.userId)) {
+      room.scores.set(player.userId, player.score);
+    }
+  });
+};
+
+const serializeRoom = (room: RoomState, status: MatchStatusType) => ({
+  inviteCode: room.inviteCode,
+  status,
+  totalPlayers: room.totalPlayers,
+  currentPlayers: room.players.size,
+  questionCount: room.questionCount,
+  timePerQ: room.timePerQ,
+  stakeAmount: room.stakeAmount,
+  creatorId: room.creatorId,
 });
 
 const clearRoomTimers = (room: RoomState) => {
@@ -273,11 +363,13 @@ const clearRoomTimers = (room: RoomState) => {
 const buildLeaderboard = (room: RoomState): ScoreEntry[] => {
   const entries = Array.from(room.scores.entries()).map(([userId, score]) => {
     const user = room.players.get(userId);
+    const answers = room.detailedAnswers.get(userId) ?? [];
     return {
       userId,
       username: user?.username ?? null,
       wallet: user?.wallet ?? "",
       score,
+      answers,
     };
   });
 
@@ -433,6 +525,7 @@ io.on("connection", (socket) => {
 
       const roomState = existingRoom ?? buildRoomState(match);
       rooms.set(inviteCode, roomState);
+      await hydrateRoomPlayers(roomState);
 
       if (!roomState.players.has(user.id)) {
         roomState.players.set(user.id, user);
@@ -442,21 +535,18 @@ io.on("connection", (socket) => {
         roomState.scores.set(user.id, 0);
       }
 
+      await markStakePaid(match.id, user.id, match.stakeAmount);
+
       io.to(inviteCode).emit("room:player-joined", {
         user,
+        currentPlayers: roomState.players.size,
+        room: serializeRoom(roomState, match.status),
       });
 
       ack?.({
         ok: true,
         data: {
-          room: {
-            inviteCode,
-            status: match.status,
-            totalPlayers: match.totalPlayers,
-            questionCount: match.questionCount,
-            timePerQ: match.timePerQ,
-            creatorId: match.creatorId,
-          },
+          room: serializeRoom(roomState, match.status),
           user,
         },
       });
@@ -498,15 +588,22 @@ io.on("connection", (socket) => {
       }
 
       roomState.questions = await fetchQuestions(match.id);
+      await hydrateRoomPlayers(roomState);
       if (!roomState.questions.length) {
         ack?.({ ok: false, error: "Room has no questions" });
         return;
       }
 
       roomState.answers = new Map();
+      roomState.detailedAnswers = new Map();
       roomState.scores = new Map(
         Array.from(roomState.players.keys()).map((playerId) => [playerId, 0])
       );
+
+      await prisma.matchPlayer.updateMany({
+        where: { matchId: match.id },
+        data: { score: 0 },
+      });
 
       roomState.started = true;
       roomState.currentIndex = null;
@@ -537,7 +634,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on("room:answer", (payload: AnswerPayload, ack?: (res: AckResponse) => void) => {
+  socket.on("room:answer", async (payload: AnswerPayload, ack?: (res: AckResponse) => void) => {
     try {
       const inviteCode = socket.data.inviteCode as string | undefined;
       if (!inviteCode) {
@@ -590,17 +687,44 @@ io.on("connection", (socket) => {
       room.answers.set(userId, answeredSet);
 
       const correct = answer === currentQuestion.correctAns;
+      const questionStartedAt = room.questionEndsAt - room.timePerQ * 1000;
+      const timeTaken = Math.max(0, Date.now() - questionStartedAt);
       if (correct) {
         const currentScore = room.scores.get(userId) ?? 0;
         room.scores.set(userId, currentScore + 1);
       }
 
+      const userDetailed = room.detailedAnswers.get(userId) ?? [];
+      userDetailed.push({
+        questionId,
+        selected: answer,
+        isCorrect: correct,
+      });
+      room.detailedAnswers.set(userId, userDetailed);
+
+      await prisma.answer
+        .create({
+          data: {
+            userId,
+            questionId,
+            selected: answer,
+            isCorrect: correct,
+            timeTaken,
+          },
+        })
+        .catch((error) => {
+          console.error("[ws] Failed to persist answer:", error);
+        });
+
+      if (correct) {
+        await prisma.matchPlayer.update({
+          where: { userId_matchId: { userId, matchId: room.matchId } },
+          data: { score: room.scores.get(userId) ?? 0 },
+        });
+      }
+
       ack?.({
         ok: true,
-        data: {
-          correct,
-          score: room.scores.get(userId) ?? 0,
-        },
       });
     } catch (error) {
       console.error("[ws] room:answer error:", error);

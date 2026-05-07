@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { MatchStatus, Prisma } from "@/app/generated/prisma/client";
+import { MatchStatus, Prisma, TxType } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type CreateMatchBody = {
@@ -178,7 +178,9 @@ const generateQuestions = async (
     difficulty: string | undefined
 ): Promise<{ questions: GeneratedQuestion[] }> => {
     if (!ai) {
-        throw new Error("Missing GEMINI_API_KEY");
+        return {
+            questions: buildFallbackQuestions(category, totalQuestions, difficulty),
+        };
     }
 
     const topic = category?.trim() || "General";
@@ -201,20 +203,51 @@ const generateQuestions = async (
      }]
     }`;
 
-    const response = await ai.models.generateContent({
-        model: AI_MODEL,
-        contents: prompt,
-    });
-    const text = response.text || "";
+    try {
+        const response = await ai.models.generateContent({
+            model: AI_MODEL,
+            contents: prompt,
+        });
+        const text = response.text || "";
 
-    const parsed = parseQuestionsJson(text);
-    const normalizedQuestions = normalizeGeneratedQuestions(parsed, count);
+        const parsed = parseQuestionsJson(text);
+        const normalizedQuestions = normalizeGeneratedQuestions(parsed, count);
 
-    if (!normalizedQuestions.length) {
-        throw new Error("Failed to parse questions JSON");
+        if (normalizedQuestions.length) {
+            return { questions: normalizedQuestions };
+        }
+    } catch (error) {
+        console.error("[match] Falling back to local questions:", error);
     }
 
-    return { questions: normalizedQuestions };
+    return {
+        questions: buildFallbackQuestions(category, totalQuestions, difficulty),
+    };
+};
+
+const buildFallbackQuestions = (
+    category: string | undefined,
+    totalQuestions: number,
+    difficulty: string | undefined
+): GeneratedQuestion[] => {
+    const topic = category?.trim() || "General";
+    const level = difficulty?.trim() || "easy";
+    const count = Math.max(1, Math.trunc(totalQuestions));
+
+    return Array.from({ length: count }, (_, index) => {
+        const answer = `${topic} answer ${index + 1}`;
+
+        return {
+            question: `${topic} ${level} practice question ${index + 1}?`,
+            options: [
+                answer,
+                `${topic} distractor ${index + 1}.1`,
+                `${topic} distractor ${index + 1}.2`,
+                `${topic} distractor ${index + 1}.3`,
+            ],
+            answer,
+        };
+    });
 };
 
 export async function POST(req: NextRequest) {
@@ -278,7 +311,10 @@ export async function POST(req: NextRequest) {
                 creatorId = existingUser.id;
             } else {
                 const createdUser = await prisma.user.create({
-                    data: { wallet },
+                    data: {
+                        wallet,
+                        username: `player-${wallet.slice(0, 6).toLowerCase()}`,
+                    },
                 });
                 creatorId = createdUser.id;
             }
@@ -339,6 +375,16 @@ export async function POST(req: NextRequest) {
                 data: {
                     userId: resolvedCreatorId,
                     matchId: createdMatch.id,
+                },
+            });
+
+            await tx.transaction.create({
+                data: {
+                    userId: resolvedCreatorId,
+                    matchId: createdMatch.id,
+                    amount: stakeAmount,
+                    type: TxType.STAKE,
+                    signature: "demo-stake-confirmed",
                 },
             });
 

@@ -16,7 +16,7 @@ export default function RootLayout({children}: {children: ReactNode}){
     // You can also provide a custom RPC endpoint.
     const endpoint = useMemo(() => clusterApiUrl(network), [network]);
 
-    const wallets = useMemo(() => [new UnsafeBurnerWalletAdapter()], [network]);
+    const wallets = useMemo(() => [new UnsafeBurnerWalletAdapter()], []);
 
     return (
         <ConnectionProvider endpoint={endpoint}>
