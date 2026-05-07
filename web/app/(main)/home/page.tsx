@@ -7,11 +7,36 @@ import { useRouter } from "next/navigation";
 import type { ChangeEvent, FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Settings2, Trophy, Clock, Users, ArrowRight } from "lucide-react";
+
 type UserRecord = {
   id: string;
   wallet: string;
   username: string | null;
   createdAt: string;
+};
+
+type MatchHistoryEntry = {
+  id: string;
+  inviteCode: string;
+  status: string;
+  stakeAmount: number;
+  totalPlayers: number;
+  questionCount: number;
+  createdAt: string;
+  winnerId: string | null;
+  creator: { username: string | null; wallet: string };
+  players: { userId: string; score: number }[];
 };
 
 type EnsureUserResponse =
@@ -57,6 +82,11 @@ function Home() {
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
 
+  const [newUsername, setNewUsername] = useState("");
+  const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
+  const [history, setHistory] = useState<MatchHistoryEntry[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -70,6 +100,7 @@ function Home() {
         setCreateStatus("idle");
         setCreateError("");
         setCreatedInviteCode(null);
+        setHistory([]);
       });
       return;
     }
@@ -99,6 +130,7 @@ function Home() {
         if (!cancelled) {
           setUser(data.data.user);
           setEnsureStatus("ready");
+          fetchHistory(data.data.user.id);
         }
       } catch (error) {
         if (!cancelled) {
@@ -116,6 +148,44 @@ function Home() {
       cancelled = true;
     };
   }, [walletAddress]);
+
+  const fetchHistory = async (userId: string) => {
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch(`/api/matches?userId=${userId}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setHistory(data);
+      } else if (data.status === "SUCCESS" && data.data.matches) {
+        setHistory(data.data.matches);
+      }
+    } catch (e) {
+      console.error("Failed to fetch history", e);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
+  const handleUpdateUsername = async () => {
+    if (!user || !newUsername.trim()) return;
+    setIsUpdatingUsername(true);
+    try {
+      const res = await fetch("/api/users", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id, username: newUsername }),
+      });
+      const data = await res.json();
+      if (data.status === "SUCCESS") {
+        setUser(data.data.user);
+        setNewUsername("");
+      }
+    } catch (e) {
+      console.error("Update username failed", e);
+    } finally {
+      setIsUpdatingUsername(false);
+    }
+  };
 
   const handleFormChange = useCallback(
     (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -197,6 +267,7 @@ function Home() {
 
         setCreatedInviteCode(data.data.match.inviteCode);
         setCreateStatus("success");
+        if (user) fetchHistory(user.id);
       } catch (error) {
         setCreateStatus("error");
         setCreateError(
@@ -231,174 +302,263 @@ function Home() {
             <p className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
               Tryhard Arena
             </p>
-            <h1 className="text-3xl font-semibold">Create a new room</h1>
+            <h1 className="text-3xl font-semibold">Dashboard</h1>
             <p className="max-w-xl text-sm text-zinc-600">
-              Connect your wallet to reserve a username, then set up a new quiz
-              room for your friends.
+              Manage your profile, create new quiz rooms, and view your match history.
             </p>
           </div>
           {mounted && <WalletMultiButton />}
         </header>
 
-        <section className="grid gap-6 rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm sm:grid-cols-2">
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              Wallet status
-            </h2>
-            <p className="text-base font-medium">
-              {connected ? "Connected" : "Not connected"}
-            </p>
-            <p className="text-xs text-zinc-500">
-              {walletAddress || "Connect a wallet to continue."}
-            </p>
-          </div>
-          <div className="space-y-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
-              User profile
-            </h2>
-            {ensureStatus === "loading" && (
-              <p className="text-sm text-zinc-500">Syncing username...</p>
-            )}
-            {ensureStatus === "error" && (
-              <p className="text-sm text-red-500">{ensureError}</p>
-            )}
-            {ensureStatus === "ready" && user && (
-              <div className="space-y-1">
-                <p className="text-base font-medium">{user.username}</p>
-                <p className="text-xs text-zinc-500">User id: {user.id}</p>
-              </div>
-            )}
-            {ensureStatus === "idle" && (
-              <p className="text-sm text-zinc-500">Awaiting wallet connection.</p>
-            )}
-          </div>
-        </section>
-
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">Join a room</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Enter an invite code to jump into an existing game.
-          </p>
-          <form className="mt-6 flex flex-col gap-3 sm:flex-row" onSubmit={handleJoinRoom}>
-            <input
-              value={joinCode}
-              onChange={(event) => setJoinCode(event.target.value)}
-              className="flex-1 rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-              placeholder="INVITE CODE"
-            />
-            <button
-              type="submit"
-              className="inline-flex h-11 items-center justify-center rounded-lg bg-zinc-900 px-6 text-sm font-semibold text-white"
-            >
-              Join room
-            </button>
-          </form>
-          {joinError && <p className="mt-2 text-sm text-red-500">{joinError}</p>}
-        </section>
-
-        <section className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-          <h2 className="text-lg font-semibold">Room details</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Customize the quiz rules and generate an invite code.
-          </p>
-
-          <form className="mt-6 grid gap-4" onSubmit={handleCreateRoom}>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Category
-                <input
-                  name="category"
-                  value={formState.category}
-                  onChange={handleFormChange}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                  placeholder="General"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Difficulty
-                <select
-                  name="difficulty"
-                  value={formState.difficulty}
-                  onChange={handleFormChange}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                >
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
-                </select>
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Total questions
-                <input
-                  name="totalQuestions"
-                  type="number"
-                  min={1}
-                  value={formState.totalQuestions}
-                  onChange={handleFormChange}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Time per question (sec)
-                <input
-                  name="timePerQ"
-                  type="number"
-                  min={5}
-                  value={formState.timePerQ}
-                  onChange={handleFormChange}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Stake amount
-                <input
-                  name="stakeAmount"
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  value={formState.stakeAmount}
-                  onChange={handleFormChange}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                />
-              </label>
-              <label className="flex flex-col gap-2 text-sm font-medium">
-                Total players
-                <input
-                  name="totalPlayers"
-                  type="number"
-                  min={2}
-                  value={formState.totalPlayers}
-                  onChange={handleFormChange}
-                  className="rounded-lg border border-zinc-200 px-3 py-2 text-sm"
-                />
-              </label>
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <button
-                type="submit"
-                disabled={!connected || ensureStatus !== "ready"}
-                className="inline-flex h-11 items-center justify-center rounded-lg bg-zinc-900 px-6 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:bg-zinc-300"
-              >
-                {createStatus === "loading" ? "Creating..." : "Create room"}
-              </button>
-              {createStatus === "error" && (
-                <p className="text-sm text-red-500">{createError}</p>
+        <section className="grid gap-6 sm:grid-cols-3">
+          <Card className="col-span-1 border-zinc-200 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                User Profile
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {ensureStatus === "ready" && user ? (
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-base font-medium">{user.username}</p>
+                    <p className="text-xs text-zinc-500 truncate">{user.wallet}</p>
+                  </div>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline" size="sm" className="w-full text-xs">
+                        <Settings2 className="mr-2 h-3.5 w-3.5" />
+                        Edit Username
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="bg-white">
+                      <DialogHeader>
+                        <DialogTitle>Update Username</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <label className="text-sm font-medium">New Username</label>
+                          <Input
+                            placeholder="Enter new username"
+                            value={newUsername}
+                            onChange={(e) => setNewUsername(e.target.value)}
+                          />
+                        </div>
+                        <Button 
+                          className="w-full bg-zinc-900 text-white" 
+                          onClick={handleUpdateUsername}
+                          disabled={isUpdatingUsername || !newUsername.trim()}
+                        >
+                          {isUpdatingUsername ? "Updating..." : "Save Changes"}
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-500">
+                  {connected ? "Syncing profile..." : "Awaiting wallet connection."}
+                </p>
               )}
-              {createStatus === "success" && createdInviteCode && (
-                <div className="flex flex-col gap-2 text-sm text-emerald-600">
-                  <p>Invite code: {createdInviteCode}</p>
-                  <Link
-                    href={`/room/${createdInviteCode}`}
-                    className="inline-flex w-fit items-center rounded-full border border-emerald-200 px-4 py-1 text-xs font-semibold text-emerald-700"
-                  >
-                    Open room
-                  </Link>
+            </CardContent>
+          </Card>
+
+          <Card className="col-span-1 border-zinc-200 shadow-sm sm:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
+                Join a Room
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form className="flex gap-3" onSubmit={handleJoinRoom}>
+                <Input
+                  value={joinCode}
+                  onChange={(event) => setJoinCode(event.target.value)}
+                  className="flex-1"
+                  placeholder="INVITE CODE (e.g. ABC123)"
+                />
+                <Button type="submit" className="bg-zinc-900 text-white">
+                  Join
+                </Button>
+              </form>
+              {joinError && <p className="mt-2 text-xs text-red-500">{joinError}</p>}
+            </CardContent>
+          </Card>
+        </section>
+
+        <div className="grid gap-10 lg:grid-cols-5">
+          <section className="lg:col-span-3 space-y-6">
+            <h2 className="text-xl font-semibold">Create New Game</h2>
+            <Card className="border-zinc-200 shadow-sm">
+              <CardContent className="pt-6">
+                <form className="grid gap-6" onSubmit={handleCreateRoom}>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="flex flex-col gap-2 text-sm font-medium">
+                      Category
+                      <Input
+                        name="category"
+                        value={formState.category}
+                        onChange={handleFormChange}
+                        placeholder="General"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-medium">
+                      Difficulty
+                      <select
+                        name="difficulty"
+                        value={formState.difficulty}
+                        onChange={handleFormChange}
+                        className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-zinc-950"
+                      >
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-medium">
+                      Questions
+                      <Input
+                        name="totalQuestions"
+                        type="number"
+                        min={1}
+                        value={formState.totalQuestions}
+                        onChange={handleFormChange}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-medium">
+                      Time (sec/Q)
+                      <Input
+                        name="timePerQ"
+                        type="number"
+                        min={5}
+                        value={formState.timePerQ}
+                        onChange={handleFormChange}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-medium">
+                      Stake (SOL)
+                      <Input
+                        name="stakeAmount"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        value={formState.stakeAmount}
+                        onChange={handleFormChange}
+                      />
+                    </label>
+                    <label className="flex flex-col gap-2 text-sm font-medium">
+                      Max Players
+                      <Input
+                        name="totalPlayers"
+                        type="number"
+                        min={2}
+                        value={formState.totalPlayers}
+                        onChange={handleFormChange}
+                      />
+                    </label>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                    <Button
+                      type="submit"
+                      disabled={!connected || ensureStatus !== "ready" || createStatus === "loading"}
+                      className="bg-zinc-900 text-white w-full sm:w-fit"
+                    >
+                      {createStatus === "loading" ? "Creating..." : "Create Room"}
+                    </Button>
+                    {createStatus === "error" && (
+                      <p className="text-xs text-red-500">{createError}</p>
+                    )}
+                    {createStatus === "success" && createdInviteCode && (
+                      <div className="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 border border-emerald-100">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-emerald-800">Room Created!</p>
+                          <p className="text-xs text-emerald-600">Code: <span className="font-bold">{createdInviteCode}</span></p>
+                        </div>
+                        <Link
+                          href={`/room/${createdInviteCode}`}
+                          className="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700"
+                        >
+                          Join Now
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </section>
+
+          <section className="lg:col-span-2 space-y-6">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold">Match History</h2>
+              <Clock className="h-4 w-4 text-zinc-400" />
+            </div>
+            
+            <div className="space-y-3">
+              {isLoadingHistory ? (
+                <div className="flex flex-col gap-3">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="h-24 w-full animate-pulse rounded-xl bg-zinc-100" />
+                  ))}
+                </div>
+              ) : history.length > 0 ? (
+                history.map((match) => {
+                  const isWinner = match.winnerId === user?.id;
+                  const myScore = match.players.find(p => p.userId === user?.id)?.score ?? 0;
+
+                  return (
+                    <Card key={match.id} className="border-zinc-200 overflow-hidden hover:border-zinc-300 transition-colors">
+                      <div className="flex">
+                        <div className={`w-1.5 ${match.status === 'FINISHED' ? (isWinner ? 'bg-emerald-500' : 'bg-red-500') : 'bg-amber-500'}`} />
+                        <div className="flex-1 p-4">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{match.inviteCode}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                              match.status === 'FINISHED' 
+                                ? (isWinner ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')
+                                : 'bg-amber-100 text-amber-700'
+                            }`}>
+                              {match.status === 'FINISHED' ? (isWinner ? 'Victory' : 'Defeat') : match.status}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-y-2">
+                            <div className="flex items-center text-xs text-zinc-600">
+                              <Trophy className="mr-1.5 h-3 w-3" />
+                              <span className="font-medium">{myScore} pts</span>
+                            </div>
+                            <div className="flex items-center text-xs text-zinc-600">
+                              <Users className="mr-1.5 h-3 w-3" />
+                              <span>{match.totalPlayers} Players</span>
+                            </div>
+                            <div className="flex items-center text-xs text-zinc-600">
+                              <span className="mr-1.5">💰</span>
+                              <span>{match.stakeAmount} SOL</span>
+                            </div>
+                            <div className="flex items-center text-xs text-zinc-400">
+                              <Clock className="mr-1.5 h-3 w-3" />
+                              <span>{new Date(match.createdAt).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          <Link 
+                            href={`/room/${match.inviteCode}`}
+                            className="mt-3 flex items-center text-xs font-semibold text-zinc-900 hover:underline"
+                          >
+                            View Details <ArrowRight className="ml-1 h-3 w-3" />
+                          </Link>
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })
+              ) : (
+                <div className="rounded-xl border border-dashed border-zinc-200 p-8 text-center">
+                  <p className="text-sm text-zinc-500">No games played yet.</p>
                 </div>
               )}
             </div>
-          </form>
-        </section>
+          </section>
+        </div>
       </main>
     </div>
   );

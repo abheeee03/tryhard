@@ -71,4 +71,33 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PATCH(req: NextRequest) {
+  try {
+    const { userId, username } = await req.json();
+
+    if (!userId || !username) {
+      return NextResponse.json(
+        { status: "FAILED", error: "Missing userId or username" },
+        { status: 400 }
+      );
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: userId },
+      data: { username: username.trim() },
+    });
+
+    return NextResponse.json({
+      status: "SUCCESS",
+      data: { user: updatedUser },
+    });
+  } catch (error) {
+    console.error("[users] Error updating username:", error);
+    return NextResponse.json(
+      { status: "FAILED", error: "Internal Server Error" },
+      { status: 500 }
+    );
+  }
+}
+
 export const ensureUser = POST;
