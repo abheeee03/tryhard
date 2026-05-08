@@ -1,7 +1,8 @@
 "use client";
 
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { Transaction } from "@solana/web3.js";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ChangeEvent, FormEvent } from "react";
@@ -18,6 +19,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Settings2, Trophy, Clock, Users, ArrowRight } from "lucide-react";
+import {
+  createInitializeEscrowInstruction,
+  createJoinEscrowInstruction,
+  getBackendAuthorityPublicKey,
+  solToLamports,
+} from "@/lib/escrow";
 
 type UserRecord = {
   id: string;
@@ -44,7 +51,34 @@ type EnsureUserResponse =
   | { status: "FAILED"; error: string };
 
 type CreateMatchResponse =
-  | { status: "SUCCESS"; data: { match: { id: string; inviteCode: string } } }
+  | {
+      status: "SUCCESS";
+      data: { match: { id: string; inviteCode: string; stakeAmount: number } };
+    }
+  | { status: "FAILED"; error: string };
+
+type RoomDetails = {
+  id: string;
+  inviteCode: string;
+  status: string;
+  stakeAmount: number;
+  totalPlayers: number;
+  questionCount: number;
+  timePerQ: number;
+};
+
+type RoomDetailsResponse =
+  | {
+      status: "SUCCESS";
+      data: {
+        match: RoomDetails;
+        userDeposit: { deposited: boolean; signature?: string; amount?: number };
+      };
+    }
+  | { status: "FAILED"; error: string };
+
+type DepositResponse =
+  | { status: "SUCCESS"; data: unknown }
   | { status: "FAILED"; error: string };
 
 const DEFAULT_FORM = {
@@ -52,13 +86,13 @@ const DEFAULT_FORM = {
   difficulty: "easy",
   totalQuestions: "10",
   timePerQ: "20",
-  stakeAmount: "0",
-  totalPlayers: "2",
+  stakeAmount: "0.1",
 };
 
 function Home() {
   const router = useRouter();
-  const { publicKey, connected } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const walletAddress = useMemo(
     () => publicKey?.toBase58() ?? "",
     [publicKey]
@@ -79,16 +113,44 @@ function Home() {
   const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(
     null
   );
+  const [createdRoomStake, setCreatedRoomStake] = useState<number | null>(null);
+  const [createDepositStatus, setCreateDepositStatus] = useState<
+    "idle" | "loading" | "signing" | "confirming" | "confirmed" | "error"
+  >("idle");
+  const [createDepositError, setCreateDepositError] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
+  const [joinRoom, setJoinRoom] = useState<RoomDetails | null>(null);
+  const [joinDialogOpen, setJoinDialogOpen] = useState(false);
+  const [joinDepositStatus, setJoinDepositStatus] = useState<
+    "idle" | "loading" | "signing" | "confirming" | "confirmed" | "error"
+  >("idle");
+  const [joinDepositError, setJoinDepositError] = useState("");
 
   const [newUsername, setNewUsername] = useState("");
   const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
   const [history, setHistory] = useState<MatchHistoryEntry[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
+  const fetchHistory = useCallback(async (userId: string) => {
+    setIsLoadingHistory(true);
+    try {
+      const res = await fetch(`/api/matches?userId=${userId}`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setHistory(data);
+      } else if (data.status === "SUCCESS" && data.data.matches) {
+        setHistory(data.data.matches);
+      }
+    } catch (e) {
+      console.error("Failed to fetch history", e);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  }, []);
+
   useEffect(() => {
-    setMounted(true);
+    queueMicrotask(() => setMounted(true));
   }, []);
 
   useEffect(() => {
@@ -100,6 +162,13 @@ function Home() {
         setCreateStatus("idle");
         setCreateError("");
         setCreatedInviteCode(null);
+        setCreatedRoomStake(null);
+        setCreateDepositStatus("idle");
+        setCreateDepositError("");
+        setJoinRoom(null);
+        setJoinDialogOpen(false);
+        setJoinDepositStatus("idle");
+        setJoinDepositError("");
         setHistory([]);
       });
       return;
@@ -147,24 +216,7 @@ function Home() {
     return () => {
       cancelled = true;
     };
-  }, [walletAddress]);
-
-  const fetchHistory = async (userId: string) => {
-    setIsLoadingHistory(true);
-    try {
-      const res = await fetch(`/api/matches?userId=${userId}`);
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setHistory(data);
-      } else if (data.status === "SUCCESS" && data.data.matches) {
-        setHistory(data.data.matches);
-      }
-    } catch (e) {
-      console.error("Failed to fetch history", e);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
+  }, [fetchHistory, walletAddress]);
 
   const handleUpdateUsername = async () => {
     if (!user || !newUsername.trim()) return;
@@ -195,6 +247,75 @@ function Home() {
     []
   );
 
+  const recordDeposit = useCallback(
+    async (inviteCode: string, signature: string) => {
+      const response = await fetch("/api/deposits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inviteCode,
+          wallet: walletAddress,
+          userId: user?.id,
+          signature,
+        }),
+      });
+      const data = (await response.json()) as DepositResponse;
+
+      if (!response.ok || data.status !== "SUCCESS") {
+        throw new Error(
+          data.status === "FAILED" ? data.error : "Failed to record deposit"
+        );
+      }
+    },
+    [user?.id, walletAddress]
+  );
+
+  const depositToEscrow = useCallback(
+    async ({
+      inviteCode,
+      stakeAmount,
+      role,
+      setStatus,
+    }: {
+      inviteCode: string;
+      stakeAmount: number;
+      role: "creator" | "joiner";
+      setStatus: (
+        status: "idle" | "loading" | "signing" | "confirming" | "confirmed" | "error"
+      ) => void;
+    }) => {
+      if (!publicKey || !walletAddress) {
+        throw new Error("Connect a wallet before depositing.");
+      }
+
+      const stakeLamports = solToLamports(stakeAmount);
+      const instruction =
+        role === "creator"
+          ? createInitializeEscrowInstruction({
+              inviteCode,
+              player: publicKey,
+              stakeLamports,
+              backendAuthority: getBackendAuthorityPublicKey(),
+            })
+          : createJoinEscrowInstruction({
+              inviteCode,
+              player: publicKey,
+            });
+
+      setStatus("signing");
+      const transaction = new Transaction().add(instruction);
+      const signature = await sendTransaction(transaction, connection);
+
+      setStatus("confirming");
+      await connection.confirmTransaction(signature, "confirmed");
+      await recordDeposit(inviteCode, signature);
+
+      setStatus("confirmed");
+      return signature;
+    },
+    [connection, publicKey, recordDeposit, sendTransaction, walletAddress]
+  );
+
   const handleCreateRoom = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
@@ -202,6 +323,9 @@ function Home() {
       setCreateStatus("loading");
       setCreateError("");
       setCreatedInviteCode(null);
+      setCreatedRoomStake(null);
+      setCreateDepositStatus("idle");
+      setCreateDepositError("");
 
       if (!walletAddress) {
         setCreateStatus("error");
@@ -212,7 +336,6 @@ function Home() {
       const totalQuestions = Number(formState.totalQuestions);
       const timePerQ = Number(formState.timePerQ);
       const stakeAmount = Number(formState.stakeAmount);
-      const totalPlayers = Number(formState.totalPlayers);
 
       if (!Number.isFinite(totalQuestions) || totalQuestions <= 0) {
         setCreateStatus("error");
@@ -226,15 +349,9 @@ function Home() {
         return;
       }
 
-      if (!Number.isFinite(stakeAmount) || stakeAmount < 0) {
+      if (!Number.isFinite(stakeAmount) || stakeAmount < 0.01) {
         setCreateStatus("error");
-        setCreateError("Stake amount must be zero or more.");
-        return;
-      }
-
-      if (!Number.isFinite(totalPlayers) || totalPlayers <= 0) {
-        setCreateStatus("error");
-        setCreateError("Total players must be a positive number.");
+        setCreateError("Stake amount must be at least 0.01 SOL.");
         return;
       }
 
@@ -245,7 +362,6 @@ function Home() {
         category: formState.category.trim() || undefined,
         difficulty: formState.difficulty.trim() || undefined,
         player1_wallet: walletAddress,
-        total_players: totalPlayers,
         userId: user?.id,
       };
 
@@ -265,23 +381,36 @@ function Home() {
           throw new Error(errorMessage);
         }
 
-        setCreatedInviteCode(data.data.match.inviteCode);
+        const createdMatch = data.data.match;
+        setCreatedInviteCode(createdMatch.inviteCode);
+        setCreatedRoomStake(createdMatch.stakeAmount);
+        await depositToEscrow({
+          inviteCode: createdMatch.inviteCode,
+          stakeAmount: createdMatch.stakeAmount,
+          role: "creator",
+          setStatus: setCreateDepositStatus,
+        });
         setCreateStatus("success");
         if (user) fetchHistory(user.id);
       } catch (error) {
         setCreateStatus("error");
+        setCreateDepositStatus("error");
         setCreateError(
           error instanceof Error ? error.message : "Failed to create match"
         );
+        setCreateDepositError(
+          error instanceof Error ? error.message : "Failed to deposit stake"
+        );
       }
     },
-    [formState, user?.id, walletAddress]
+    [depositToEscrow, fetchHistory, formState, user, walletAddress]
   );
 
   const handleJoinRoom = useCallback(
-    (event: FormEvent<HTMLFormElement>) => {
+    async (event: FormEvent<HTMLFormElement>) => {
       event.preventDefault();
       setJoinError("");
+      setJoinDepositError("");
 
       const trimmed = joinCode.trim().toUpperCase();
       if (!trimmed) {
@@ -289,10 +418,93 @@ function Home() {
         return;
       }
 
-      router.push(`/room/${trimmed}`);
+      if (!walletAddress || !user?.id) {
+        setJoinError("Connect a wallet before joining.");
+        return;
+      }
+
+      setJoinDepositStatus("loading");
+
+      try {
+        const response = await fetch(
+          `/api/matches/${trimmed}?userId=${user.id}&wallet=${walletAddress}`
+        );
+        const data = (await response.json()) as RoomDetailsResponse;
+
+        if (!response.ok || data.status !== "SUCCESS") {
+          throw new Error(
+            data.status === "FAILED" ? data.error : "Failed to load room"
+          );
+        }
+
+        if (data.data.match.status !== "WAITING") {
+          throw new Error("Room is not accepting players.");
+        }
+
+        if (data.data.userDeposit.deposited) {
+          router.push(`/room/${trimmed}`);
+          return;
+        }
+
+        setJoinRoom(data.data.match);
+        setJoinDialogOpen(true);
+        setJoinDepositStatus("idle");
+      } catch (error) {
+        setJoinDepositStatus("error");
+        setJoinError(error instanceof Error ? error.message : "Failed to join");
+      }
     },
-    [joinCode, router]
+    [joinCode, router, user, walletAddress]
   );
+
+  const handleJoinDeposit = useCallback(async () => {
+    if (!joinRoom) {
+      return;
+    }
+
+    setJoinDepositError("");
+
+    try {
+      await depositToEscrow({
+        inviteCode: joinRoom.inviteCode,
+        stakeAmount: joinRoom.stakeAmount,
+        role: "joiner",
+        setStatus: setJoinDepositStatus,
+      });
+      router.push(`/room/${joinRoom.inviteCode}`);
+    } catch (error) {
+      setJoinDepositStatus("error");
+      setJoinDepositError(
+        error instanceof Error ? error.message : "Failed to deposit stake"
+      );
+    }
+  }, [depositToEscrow, joinRoom, router]);
+
+  const handleRetryCreateDeposit = useCallback(async () => {
+    if (!createdInviteCode || !createdRoomStake) {
+      return;
+    }
+
+    setCreateError("");
+    setCreateDepositError("");
+
+    try {
+      await depositToEscrow({
+        inviteCode: createdInviteCode,
+        stakeAmount: createdRoomStake,
+        role: "creator",
+        setStatus: setCreateDepositStatus,
+      });
+      setCreateStatus("success");
+      if (user) fetchHistory(user.id);
+    } catch (error) {
+      setCreateStatus("error");
+      setCreateDepositStatus("error");
+      setCreateDepositError(
+        error instanceof Error ? error.message : "Failed to deposit stake"
+      );
+    }
+  }, [createdInviteCode, createdRoomStake, depositToEscrow, fetchHistory, user]);
 
   return (
     <div className="flex flex-1 justify-center bg-zinc-50 text-zinc-900">
@@ -356,9 +568,14 @@ function Home() {
                   </Dialog>
                 </div>
               ) : (
-                <p className="text-sm text-zinc-500">
-                  {connected ? "Syncing profile..." : "Awaiting wallet connection."}
-                </p>
+                <div className="space-y-2">
+                  <p className="text-sm text-zinc-500">
+                    {connected ? "Syncing profile..." : "Awaiting wallet connection."}
+                  </p>
+                  {ensureStatus === "error" && (
+                    <p className="text-xs text-red-500">{ensureError}</p>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>
@@ -378,10 +595,53 @@ function Home() {
                   placeholder="INVITE CODE (e.g. ABC123)"
                 />
                 <Button type="submit" className="bg-zinc-900 text-white">
-                  Join
+                  {joinDepositStatus === "loading" ? "Checking..." : "Join"}
                 </Button>
               </form>
               {joinError && <p className="mt-2 text-xs text-red-500">{joinError}</p>}
+              <Dialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
+                <DialogContent className="bg-white">
+                  <DialogHeader>
+                    <DialogTitle>Deposit stake to join</DialogTitle>
+                  </DialogHeader>
+                  {joinRoom && (
+                    <div className="space-y-4">
+                      <div className="rounded-lg border border-zinc-200 p-4 text-sm">
+                        <div className="flex justify-between">
+                          <span className="text-zinc-500">Room</span>
+                          <span className="font-semibold">{joinRoom.inviteCode}</span>
+                        </div>
+                        <div className="mt-2 flex justify-between">
+                          <span className="text-zinc-500">Stake required</span>
+                          <span className="font-semibold">{joinRoom.stakeAmount} SOL</span>
+                        </div>
+                        <div className="mt-2 flex justify-between">
+                          <span className="text-zinc-500">Questions</span>
+                          <span className="font-semibold">{joinRoom.questionCount}</span>
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={handleJoinDeposit}
+                        disabled={
+                          joinDepositStatus === "signing" ||
+                          joinDepositStatus === "confirming"
+                        }
+                        className="w-full bg-zinc-900 text-white"
+                      >
+                        {joinDepositStatus === "signing"
+                          ? "Sign deposit..."
+                          : joinDepositStatus === "confirming"
+                            ? "Confirming..."
+                            : `Deposit ${joinRoom.stakeAmount} SOL`}
+                      </Button>
+                      {joinDepositError && (
+                        <p className="text-xs text-red-500">{joinDepositError}</p>
+                      )}
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
             </CardContent>
           </Card>
         </section>
@@ -440,19 +700,9 @@ function Home() {
                       <Input
                         name="stakeAmount"
                         type="number"
-                        min={0}
-                        step="0.01"
+                        min={0.01}
+                        step="any"
                         value={formState.stakeAmount}
-                        onChange={handleFormChange}
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm font-medium">
-                      Max Players
-                      <Input
-                        name="totalPlayers"
-                        type="number"
-                        min={2}
-                        value={formState.totalPlayers}
                         onChange={handleFormChange}
                       />
                     </label>
@@ -464,15 +714,34 @@ function Home() {
                       disabled={!connected || ensureStatus !== "ready" || createStatus === "loading"}
                       className="bg-zinc-900 text-white w-full sm:w-fit"
                     >
-                      {createStatus === "loading" ? "Creating..." : "Create Room"}
+                      {createStatus === "loading"
+                        ? createDepositStatus === "signing"
+                          ? "Sign stake..."
+                          : createDepositStatus === "confirming"
+                            ? "Confirming stake..."
+                            : "Creating..."
+                        : "Create Room"}
                     </Button>
                     {createStatus === "error" && (
                       <p className="text-xs text-red-500">{createError}</p>
                     )}
+                    {createDepositStatus === "error" && createDepositError && (
+                      <p className="text-xs text-red-500">{createDepositError}</p>
+                    )}
+                    {createdInviteCode && createDepositStatus === "error" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleRetryCreateDeposit}
+                        className="w-full sm:w-fit"
+                      >
+                        Retry stake deposit
+                      </Button>
+                    )}
                     {createStatus === "success" && createdInviteCode && (
                       <div className="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 border border-emerald-100">
                         <div className="flex-1">
-                          <p className="text-sm font-medium text-emerald-800">Room Created!</p>
+                          <p className="text-sm font-medium text-emerald-800">Room created and stake deposited!</p>
                           <p className="text-xs text-emerald-600">Code: <span className="font-bold">{createdInviteCode}</span></p>
                         </div>
                         <Link

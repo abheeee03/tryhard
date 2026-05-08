@@ -1,11 +1,18 @@
 "use client";
 
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { Transaction } from "@solana/web3.js";
 import type { Socket } from "socket.io-client";
 import { io } from "socket.io-client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import {
+  createInitializeEscrowInstruction,
+  createJoinEscrowInstruction,
+  getBackendAuthorityPublicKey,
+  solToLamports,
+} from "@/lib/escrow";
 
 type UserRecord = {
   id: string;
@@ -22,6 +29,13 @@ type RoomInfo = {
   timePerQ: number;
   stakeAmount: number;
   creatorId: string;
+  depositedPlayers?: {
+    userId: string;
+    wallet: string;
+    username: string | null;
+    amount: number;
+    signature: string | null;
+  }[];
 };
 
 type JoinRoomResponse =
@@ -71,10 +85,25 @@ type EnsureUserResponse =
   | { status: "SUCCESS"; data: { user: UserRecord } }
   | { status: "FAILED"; error: string };
 
+type RoomDetailsResponse =
+  | {
+      status: "SUCCESS";
+      data: {
+        match: RoomInfo;
+        userDeposit: { deposited: boolean; signature?: string; amount?: number };
+      };
+    }
+  | { status: "FAILED"; error: string };
+
+type DepositResponse =
+  | { status: "SUCCESS"; data: unknown }
+  | { status: "FAILED"; error: string };
+
 const wsUrl = process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:8080";
 
 export default function RoomPage() {
-  const { publicKey, connected } = useWallet();
+  const { connection } = useConnection();
+  const { publicKey, connected, sendTransaction } = useWallet();
   const socketRef = useRef<Socket | null>(null);
   const params = useParams();
   const walletAddress = useMemo(
@@ -101,6 +130,11 @@ export default function RoomPage() {
   >("idle");
   const [joinError, setJoinError] = useState("");
   const [room, setRoom] = useState<RoomInfo | null>(null);
+  const [depositStatus, setDepositStatus] = useState<
+    "idle" | "loading" | "required" | "signing" | "confirming" | "confirmed" | "error"
+  >("idle");
+  const [depositError, setDepositError] = useState("");
+  const [depositSignature, setDepositSignature] = useState<string | null>(null);
 
   const [phase, setPhase] = useState<
     "waiting" | "starting" | "question" | "intermission" | "finished"
@@ -123,7 +157,7 @@ export default function RoomPage() {
   const isCreator = room?.creatorId && user?.id === room.creatorId;
 
   useEffect(() => {
-    setMounted(true);
+    queueMicrotask(() => setMounted(true));
   }, []);
 
   useEffect(() => {
@@ -132,6 +166,9 @@ export default function RoomPage() {
         setUser(null);
         setEnsureStatus("idle");
         setEnsureError("");
+        setDepositStatus("idle");
+        setDepositError("");
+        setDepositSignature(null);
       });
       return;
     }
@@ -179,6 +216,61 @@ export default function RoomPage() {
 
   useEffect(() => {
     if (!connected || !user?.id || !walletAddress || !inviteCode) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchRoomDetails = async () => {
+      setDepositStatus("loading");
+      setDepositError("");
+
+      try {
+        const response = await fetch(
+          `/api/matches/${inviteCode}?userId=${user.id}&wallet=${walletAddress}`
+        );
+        const data = (await response.json()) as RoomDetailsResponse;
+
+        if (!response.ok || data.status !== "SUCCESS") {
+          throw new Error(
+            data.status === "FAILED" ? data.error : "Failed to load room"
+          );
+        }
+
+        if (!cancelled) {
+          setRoom(data.data.match);
+          if (data.data.userDeposit.deposited) {
+            setDepositStatus("confirmed");
+            setDepositSignature(data.data.userDeposit.signature ?? null);
+          } else {
+            setDepositStatus("required");
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setDepositStatus("error");
+          setDepositError(
+            error instanceof Error ? error.message : "Failed to load deposit"
+          );
+        }
+      }
+    };
+
+    fetchRoomDetails();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, inviteCode, user?.id, walletAddress]);
+
+  useEffect(() => {
+    if (
+      !connected ||
+      !user?.id ||
+      !walletAddress ||
+      !inviteCode ||
+      depositStatus !== "confirmed"
+    ) {
       queueMicrotask(() => {
         setJoinStatus("idle");
         setJoinError("");
@@ -274,7 +366,7 @@ export default function RoomPage() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [connected, user?.id, walletAddress, inviteCode]);
+  }, [connected, user?.id, walletAddress, inviteCode, depositStatus]);
 
   useEffect(() => {
     if (!question?.endsAt) {
@@ -311,6 +403,64 @@ export default function RoomPage() {
     const timer = setInterval(update, 250);
     return () => clearInterval(timer);
   }, [startsAt]);
+
+  const handleDeposit = useCallback(async () => {
+    if (!room || !publicKey || !walletAddress || !user?.id) {
+      setDepositError("Connect a wallet before depositing.");
+      return;
+    }
+
+    setDepositError("");
+
+    try {
+      const stakeLamports = solToLamports(room.stakeAmount);
+      const instruction =
+        user.id === room.creatorId
+          ? createInitializeEscrowInstruction({
+              inviteCode: room.inviteCode,
+              player: publicKey,
+              stakeLamports,
+              backendAuthority: getBackendAuthorityPublicKey(),
+            })
+          : createJoinEscrowInstruction({
+              inviteCode: room.inviteCode,
+              player: publicKey,
+            });
+
+      setDepositStatus("signing");
+      const transaction = new Transaction().add(instruction);
+      const signature = await sendTransaction(transaction, connection);
+
+      setDepositStatus("confirming");
+      await connection.confirmTransaction(signature, "confirmed");
+
+      const response = await fetch("/api/deposits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inviteCode: room.inviteCode,
+          userId: user.id,
+          wallet: walletAddress,
+          signature,
+        }),
+      });
+      const data = (await response.json()) as DepositResponse;
+
+      if (!response.ok || data.status !== "SUCCESS") {
+        throw new Error(
+          data.status === "FAILED" ? data.error : "Failed to record deposit"
+        );
+      }
+
+      setDepositSignature(signature);
+      setDepositStatus("confirmed");
+    } catch (error) {
+      setDepositStatus("error");
+      setDepositError(
+        error instanceof Error ? error.message : "Failed to deposit stake"
+      );
+    }
+  }, [connection, publicKey, room, sendTransaction, user, walletAddress]);
 
   const handleStart = useCallback(() => {
     setStartError("");
@@ -372,11 +522,59 @@ export default function RoomPage() {
           </p>
           <h1 className="text-2xl font-semibold">Room {inviteCode}</h1>
           <p className="text-sm text-white/60">
-            Stake: {room?.stakeAmount ?? 0} SOL confirmed (demo)
+            Stake: {room?.stakeAmount ?? 0} SOL
           </p>
         </div>
         {mounted && <WalletMultiButton />}
       </header>
+
+      {connected && user && room && depositStatus !== "confirmed" && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-6 text-white shadow-2xl">
+            <p className="text-xs uppercase tracking-[0.3em] text-white/50">
+              Stake required
+            </p>
+            <h2 className="mt-2 text-xl font-semibold">
+              Deposit {room.stakeAmount} SOL to enter
+            </h2>
+            <div className="mt-4 space-y-2 rounded-xl border border-white/10 bg-white/5 p-4 text-sm">
+              <div className="flex justify-between">
+                <span className="text-white/50">Room</span>
+                <span>{room.inviteCode}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/50">Players</span>
+                <span>{room.currentPlayers}/{room.totalPlayers}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-white/50">Role</span>
+                <span>{isCreator ? "Creator" : "Player 2"}</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleDeposit}
+              disabled={
+                depositStatus === "loading" ||
+                depositStatus === "signing" ||
+                depositStatus === "confirming"
+              }
+              className="mt-5 h-11 w-full rounded-full bg-white px-6 text-sm font-semibold text-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {depositStatus === "loading"
+                ? "Loading room..."
+                : depositStatus === "signing"
+                  ? "Sign deposit..."
+                  : depositStatus === "confirming"
+                    ? "Confirming..."
+                    : "Deposit stake"}
+            </button>
+            {depositError && (
+              <p className="mt-3 text-xs text-red-300">{depositError}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-10">
         <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
@@ -405,6 +603,15 @@ export default function RoomPage() {
               {joinError && <p className="text-xs text-red-400">{joinError}</p>}
             </div>
             <div>
+              <p className="text-sm text-white/60">Deposit</p>
+              <p className="text-base font-semibold">{depositStatus}</p>
+              {depositSignature && (
+                <p className="max-w-36 truncate text-xs text-white/40">
+                  {depositSignature}
+                </p>
+              )}
+            </div>
+            <div>
               <p className="text-sm text-white/60">Players</p>
               <p className="text-base font-semibold">
                 {room ? `${room.currentPlayers}/${room.totalPlayers}` : "-"}
@@ -420,8 +627,33 @@ export default function RoomPage() {
                 <h2 className="text-xl font-semibold">Waiting for players</h2>
                 <p className="text-sm text-white/60">
                   Room is ready. The creator can start the game once everyone is
-                  in.
+                  in and both deposits are confirmed.
                 </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {Array.from({ length: room?.totalPlayers ?? 2 }, (_, index) => {
+                  const deposit = room?.depositedPlayers?.[index];
+                  return (
+                    <div
+                      key={deposit?.userId ?? index}
+                      className="rounded-xl border border-white/10 bg-white/5 p-4"
+                    >
+                      <p className="text-xs uppercase tracking-[0.25em] text-white/40">
+                        Player {index + 1}
+                      </p>
+                      <p className="mt-2 truncate text-sm font-semibold">
+                        {deposit?.username ?? deposit?.wallet ?? "Waiting"}
+                      </p>
+                      <p
+                        className={`mt-1 text-xs ${
+                          deposit ? "text-emerald-300" : "text-amber-300"
+                        }`}
+                      >
+                        {deposit ? "Deposit confirmed" : "Deposit pending"}
+                      </p>
+                    </div>
+                  );
+                })}
               </div>
               {isCreator && (
                 <div className="flex flex-col gap-2">

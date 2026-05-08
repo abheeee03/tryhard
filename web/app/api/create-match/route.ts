@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { GoogleGenAI } from "@google/genai";
-import { MatchStatus, Prisma, TxType } from "@/app/generated/prisma/client";
+import { MatchStatus, Prisma } from "@/app/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 
 type CreateMatchBody = {
@@ -11,7 +11,6 @@ type CreateMatchBody = {
     stake_amount?: number;
     difficulty?: string;
     player1_wallet?: string;
-    total_players?: number;
     userId?: string;
 };
 
@@ -265,7 +264,6 @@ export async function POST(req: NextRequest) {
     const timePerQRaw = Number(body.time_per_que);
     const questionCountRaw = Number(body.total_questions);
     const stakeAmountRaw = Number(body.stake_amount ?? 0);
-    const totalPlayersRaw = Number(body.total_players ?? 2);
 
     if (!Number.isFinite(timePerQRaw) || timePerQRaw <= 0) {
         return NextResponse.json(
@@ -281,9 +279,9 @@ export async function POST(req: NextRequest) {
         );
     }
 
-    if (!Number.isFinite(stakeAmountRaw) || stakeAmountRaw < 0) {
+    if (!Number.isFinite(stakeAmountRaw) || stakeAmountRaw < 0.01) {
         return NextResponse.json(
-            { status: "FAILED", error: "Invalid stake_amount" },
+            { status: "FAILED", error: "stake_amount must be at least 0.01 SOL" },
             { status: 400 }
         );
     }
@@ -291,10 +289,7 @@ export async function POST(req: NextRequest) {
     const timePerQ = Math.trunc(timePerQRaw);
     const questionCount = Math.trunc(questionCountRaw);
     const stakeAmount = stakeAmountRaw;
-    const totalPlayers =
-        Number.isFinite(totalPlayersRaw) && totalPlayersRaw > 0
-            ? Math.trunc(totalPlayersRaw)
-            : 2;
+    const totalPlayers = 2;
 
     const bodyUserId = body.userId
     const wallet = body.player1_wallet?.trim();
@@ -375,16 +370,6 @@ export async function POST(req: NextRequest) {
                 data: {
                     userId: resolvedCreatorId,
                     matchId: createdMatch.id,
-                },
-            });
-
-            await tx.transaction.create({
-                data: {
-                    userId: resolvedCreatorId,
-                    matchId: createdMatch.id,
-                    amount: stakeAmount,
-                    type: TxType.STAKE,
-                    signature: "demo-stake-confirmed",
                 },
             });
 

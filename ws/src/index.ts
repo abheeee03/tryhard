@@ -255,11 +255,10 @@ const ensureMatchPlayer = async (matchId: string, userId: string) => {
   });
 };
 
-const markStakePaid = async (
+const hasStakePaid = async (
   matchId: string,
-  userId: string,
-  amount: number
-) => {
+  userId: string
+): Promise<boolean> => {
   const existingStake = await prisma.transaction.findFirst({
     where: {
       matchId,
@@ -269,18 +268,25 @@ const markStakePaid = async (
     select: { id: true },
   });
 
-  if (existingStake) {
-    return;
-  }
+  return Boolean(existingStake);
+};
 
-  await prisma.transaction.create({
-    data: {
+const fetchDepositedPlayers = async (matchId: string) => {
+  return prisma.transaction.findMany({
+    where: {
       matchId,
-      userId,
-      amount,
       type: TxType.STAKE,
-      signature: "demo-stake-confirmed",
     },
+    select: {
+      userId: true,
+      amount: true,
+      signature: true,
+      createdAt: true,
+      user: {
+        select: { id: true, wallet: true, username: true },
+      },
+    },
+    orderBy: { createdAt: "asc" },
   });
 };
 
@@ -344,7 +350,7 @@ const hydrateRoomPlayers = async (room: RoomState) => {
   });
 };
 
-const serializeRoom = (room: RoomState, status: MatchStatusType) => ({
+const serializeRoom = async (room: RoomState, status: MatchStatusType) => ({
   inviteCode: room.inviteCode,
   status,
   totalPlayers: room.totalPlayers,
@@ -353,6 +359,13 @@ const serializeRoom = (room: RoomState, status: MatchStatusType) => ({
   timePerQ: room.timePerQ,
   stakeAmount: room.stakeAmount,
   creatorId: room.creatorId,
+  depositedPlayers: (await fetchDepositedPlayers(room.matchId)).map((deposit) => ({
+    userId: deposit.userId,
+    wallet: deposit.user.wallet,
+    username: deposit.user.username,
+    amount: deposit.amount,
+    signature: deposit.signature,
+  })),
 });
 
 const clearRoomTimers = (room: RoomState) => {
@@ -377,6 +390,40 @@ const buildLeaderboard = (room: RoomState): ScoreEntry[] => {
   return entries;
 };
 
+const callEndGameRoute = async (
+  room: RoomState,
+  winnerId: string | null
+) => {
+  const baseUrl =
+    process.env.NEXT_APP_URL ??
+    process.env.WEB_APP_URL ??
+    "http://localhost:3000";
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (process.env.END_GAME_SECRET) {
+    headers.Authorization = `Bearer ${process.env.END_GAME_SECRET}`;
+  }
+
+  const response = await fetch(`${baseUrl}/api/end-game`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      matchId: room.matchId,
+      inviteCode: room.inviteCode,
+      winnerId,
+    }),
+  });
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(data?.error ?? "End game route failed");
+  }
+
+  return data;
+};
+
 const finishRoom = async (room: RoomState) => {
   room.started = false;
   room.currentIndex = null;
@@ -387,7 +434,14 @@ const finishRoom = async (room: RoomState) => {
   const leaderboard = buildLeaderboard(room);
   const topScore = leaderboard[0]?.score ?? 0;
   const winners = leaderboard.filter((entry) => entry.score === topScore);
-  const winnerId = winners.length === 1 ? winners[0].userId : null;
+  const isDraw = winners.length !== 1;
+  const winnerId = isDraw ? null : winners[0].userId;
+
+  console.log(
+    `[ws] Match ${room.inviteCode} finished. Top score: ${topScore}, Winners: ${winners.length}, Result: ${
+      isDraw ? "DRAW (both get refund)" : `WINNER ${winnerId}`
+    }`
+  );
 
   await prisma.match.update({
     where: { id: room.matchId },
@@ -398,10 +452,22 @@ const finishRoom = async (room: RoomState) => {
     },
   });
 
+  let payment: unknown = null;
+  try {
+    payment = await callEndGameRoute(room, winnerId);
+  } catch (error) {
+    console.error("[ws] Failed to release payment:", error);
+    payment = {
+      status: "FAILED",
+      error: error instanceof Error ? error.message : "Failed to release payment",
+    };
+  }
+
   io.to(room.inviteCode).emit("room:finished", {
     endedAt: Date.now(),
     winners,
     leaderboard,
+    payment,
   });
 };
 
@@ -507,6 +573,12 @@ io.on("connection", (socket) => {
       }
 
       const alreadyJoined = await hasMatchPlayer(match.id, user.id);
+      const stakePaid = await hasStakePaid(match.id, user.id);
+      if (!stakePaid) {
+        ack?.({ ok: false, error: "Deposit required before joining" });
+        return;
+      }
+
       if (!alreadyJoined) {
         const playerCount = await countMatchPlayers(match.id);
         if (playerCount >= match.totalPlayers) {
@@ -535,18 +607,18 @@ io.on("connection", (socket) => {
         roomState.scores.set(user.id, 0);
       }
 
-      await markStakePaid(match.id, user.id, match.stakeAmount);
+      const serializedRoom = await serializeRoom(roomState, match.status);
 
       io.to(inviteCode).emit("room:player-joined", {
         user,
         currentPlayers: roomState.players.size,
-        room: serializeRoom(roomState, match.status),
+        room: serializedRoom,
       });
 
       ack?.({
         ok: true,
         data: {
-          room: serializeRoom(roomState, match.status),
+          room: serializedRoom,
           user,
         },
       });
@@ -591,6 +663,20 @@ io.on("connection", (socket) => {
       await hydrateRoomPlayers(roomState);
       if (!roomState.questions.length) {
         ack?.({ ok: false, error: "Room has no questions" });
+        return;
+      }
+
+      const dbPlayers = await fetchMatchPlayers(match.id);
+      if (dbPlayers.length !== 2) {
+        ack?.({ ok: false, error: "This game requires exactly 2 players" });
+        return;
+      }
+
+      const depositChecks = await Promise.all(
+        dbPlayers.map((player) => hasStakePaid(match.id, player.userId))
+      );
+      if (depositChecks.some((paid) => !paid)) {
+        ack?.({ ok: false, error: "Both player deposits must be confirmed" });
         return;
       }
 
