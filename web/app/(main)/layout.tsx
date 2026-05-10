@@ -22,7 +22,6 @@ export default function RootLayout({children}: {children: ReactNode}){
         <ConnectionProvider endpoint={endpoint}>
             <WalletProvider wallets={wallets} autoConnect>
                 <WalletModalProvider>
-                    { /* Your app's components go here, nested within the context providers. */ }
                 {children}
                 </WalletModalProvider>
             </WalletProvider>

@@ -258,6 +258,41 @@ export default function Home() {
             </motion.div>
           </section>
         </motion.main>
+        <div className="h-screen w-full px-10 flex items-center justify-center">
+              <div className="h-full w-full rounded-xl bg-white flex items-center justify-center text-center">
+              <h1 className={cn(
+                "text-7xl font-black"
+                ,font2.className
+              )}
+              >
+                Your Knowledge <br /> Has Value
+              </h1>
+              </div>
+        </div>
+        <div className="h-screen w-full bg-white px-10 py-5 flex items-center justify-center gap-5">
+          <div className="flex flex-col gap-3">
+            <div className="border h-60 w-70 rounded-md px-3 py-4">
+              <h1 className="font-black text-xl">Create or Join Match</h1>
+            </div>
+            <div className="border h-60 w-70 rounded-md px-3 py-4">
+              <h1 className="font-black text-xl">Stake Sol</h1>
+            </div>
+          </div>
+          <h1 className={cn(
+            "text-4xl border rounded-md py-5 px-3 font-black text-center"
+          )}
+              >
+                Your Knowledge <br /> Has Value
+          </h1>
+          <div className="flex flex-col gap-3">
+            <div className="border h-60 w-70 rounded-md px-3 py-4">
+              <h1 className="font-black text-xl">Answer</h1>
+            </div>
+            <div className="border h-60 w-70 rounded-md px-3 py-4">
+              <h1 className="font-black text-xl">Win</h1>
+            </div>
+          </div>
+          </div>
         </>
       )}
     </div>

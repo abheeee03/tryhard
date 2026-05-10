@@ -1,11 +1,10 @@
 "use client";
 
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { Transaction } from "@solana/web3.js";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { ChangeEvent, FormEvent } from "react";
+import type { FormEvent } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -13,18 +12,18 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Settings2, Trophy, Clock, Users, ArrowRight } from "lucide-react";
+import { Settings2, Trophy, Clock, Users, ArrowRight, Plus, Globe } from "lucide-react";
 import {
-  createInitializeEscrowInstruction,
   createJoinEscrowInstruction,
-  getBackendAuthorityPublicKey,
   solToLamports,
 } from "@/lib/escrow";
+import UserDialog from "@/components/ui/user-dialog";
+import Logo from "@/components/logo";
+import { ConnectWallet } from "@/components/ui/connect-wallet";
 
 type UserRecord = {
   id: string;
@@ -33,7 +32,7 @@ type UserRecord = {
   createdAt: string;
 };
 
-type MatchHistoryEntry = {
+type MatchEntry = {
   id: string;
   inviteCode: string;
   status: string;
@@ -43,18 +42,11 @@ type MatchHistoryEntry = {
   createdAt: string;
   winnerId: string | null;
   creator: { username: string | null; wallet: string };
-  players: { userId: string; score: number }[];
+  players: { userId: string; score: number; user: { username: string | null } }[];
 };
 
 type EnsureUserResponse =
   | { status: "SUCCESS"; data: { user: UserRecord } }
-  | { status: "FAILED"; error: string };
-
-type CreateMatchResponse =
-  | {
-      status: "SUCCESS";
-      data: { match: { id: string; inviteCode: string; stakeAmount: number } };
-    }
   | { status: "FAILED"; error: string };
 
 type RoomDetails = {
@@ -81,14 +73,6 @@ type DepositResponse =
   | { status: "SUCCESS"; data: unknown }
   | { status: "FAILED"; error: string };
 
-const DEFAULT_FORM = {
-  category: "General",
-  difficulty: "easy",
-  totalQuestions: "10",
-  timePerQ: "20",
-  stakeAmount: "0.1",
-};
-
 function Home() {
   const router = useRouter();
   const { connection } = useConnection();
@@ -97,7 +81,6 @@ function Home() {
     () => publicKey?.toBase58() ?? "",
     [publicKey]
   );
-
   const [user, setUser] = useState<UserRecord | null>(null);
   const [mounted, setMounted] = useState(false);
   const [ensureStatus, setEnsureStatus] = useState<
@@ -105,19 +88,6 @@ function Home() {
   >("idle");
   const [ensureError, setEnsureError] = useState("");
 
-  const [formState, setFormState] = useState(DEFAULT_FORM);
-  const [createStatus, setCreateStatus] = useState<
-    "idle" | "loading" | "success" | "error"
-  >("idle");
-  const [createError, setCreateError] = useState("");
-  const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(
-    null
-  );
-  const [createdRoomStake, setCreatedRoomStake] = useState<number | null>(null);
-  const [createDepositStatus, setCreateDepositStatus] = useState<
-    "idle" | "loading" | "signing" | "confirming" | "confirmed" | "error"
-  >("idle");
-  const [createDepositError, setCreateDepositError] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [joinError, setJoinError] = useState("");
   const [joinRoom, setJoinRoom] = useState<RoomDetails | null>(null);
@@ -129,8 +99,10 @@ function Home() {
 
   const [newUsername, setNewUsername] = useState("");
   const [isUpdatingUsername, setIsUpdatingUsername] = useState(false);
-  const [history, setHistory] = useState<MatchHistoryEntry[]>([]);
+  const [history, setHistory] = useState<MatchEntry[]>([]);
+  const [allMatches, setAllMatches] = useState<MatchEntry[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isLoadingAllMatches, setIsLoadingAllMatches] = useState(false);
 
   const fetchHistory = useCallback(async (userId: string) => {
     setIsLoadingHistory(true);
@@ -149,9 +121,25 @@ function Home() {
     }
   }, []);
 
+  const fetchAllMatches = useCallback(async () => {
+    setIsLoadingAllMatches(true);
+    try {
+      const res = await fetch(`/api/matches`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setAllMatches(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch all matches", e);
+    } finally {
+      setIsLoadingAllMatches(false);
+    }
+  }, []);
+
   useEffect(() => {
     queueMicrotask(() => setMounted(true));
-  }, []);
+    fetchAllMatches();
+  }, [fetchAllMatches]);
 
   useEffect(() => {
     if (!walletAddress) {
@@ -159,12 +147,6 @@ function Home() {
         setUser(null);
         setEnsureStatus("idle");
         setEnsureError("");
-        setCreateStatus("idle");
-        setCreateError("");
-        setCreatedInviteCode(null);
-        setCreatedRoomStake(null);
-        setCreateDepositStatus("idle");
-        setCreateDepositError("");
         setJoinRoom(null);
         setJoinDialogOpen(false);
         setJoinDepositStatus("idle");
@@ -239,14 +221,6 @@ function Home() {
     }
   };
 
-  const handleFormChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-      const { name, value } = event.target;
-      setFormState((prev) => ({ ...prev, [name]: value }));
-    },
-    []
-  );
-
   const recordDeposit = useCallback(
     async (inviteCode: string, signature: string) => {
       const response = await fetch("/api/deposits", {
@@ -270,149 +244,17 @@ function Home() {
     [user?.id, walletAddress]
   );
 
-  const depositToEscrow = useCallback(
-    async ({
-      inviteCode,
-      stakeAmount,
-      role,
-      setStatus,
-    }: {
-      inviteCode: string;
-      stakeAmount: number;
-      role: "creator" | "joiner";
-      setStatus: (
-        status: "idle" | "loading" | "signing" | "confirming" | "confirmed" | "error"
-      ) => void;
-    }) => {
-      if (!publicKey || !walletAddress) {
-        throw new Error("Connect a wallet before depositing.");
-      }
-
-      const stakeLamports = solToLamports(stakeAmount);
-      const instruction =
-        role === "creator"
-          ? createInitializeEscrowInstruction({
-              inviteCode,
-              player: publicKey,
-              stakeLamports,
-              backendAuthority: getBackendAuthorityPublicKey(),
-            })
-          : createJoinEscrowInstruction({
-              inviteCode,
-              player: publicKey,
-            });
-
-      setStatus("signing");
-      const transaction = new Transaction().add(instruction);
-      const signature = await sendTransaction(transaction, connection);
-
-      setStatus("confirming");
-      await connection.confirmTransaction(signature, "confirmed");
-      await recordDeposit(inviteCode, signature);
-
-      setStatus("confirmed");
-      return signature;
-    },
-    [connection, publicKey, recordDeposit, sendTransaction, walletAddress]
-  );
-
-  const handleCreateRoom = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
-
-      setCreateStatus("loading");
-      setCreateError("");
-      setCreatedInviteCode(null);
-      setCreatedRoomStake(null);
-      setCreateDepositStatus("idle");
-      setCreateDepositError("");
-
-      if (!walletAddress) {
-        setCreateStatus("error");
-        setCreateError("Connect a wallet to create a room.");
-        return;
-      }
-
-      const totalQuestions = Number(formState.totalQuestions);
-      const timePerQ = Number(formState.timePerQ);
-      const stakeAmount = Number(formState.stakeAmount);
-
-      if (!Number.isFinite(totalQuestions) || totalQuestions <= 0) {
-        setCreateStatus("error");
-        setCreateError("Total questions must be a positive number.");
-        return;
-      }
-
-      if (!Number.isFinite(timePerQ) || timePerQ <= 0) {
-        setCreateStatus("error");
-        setCreateError("Time per question must be a positive number.");
-        return;
-      }
-
-      if (!Number.isFinite(stakeAmount) || stakeAmount < 0.01) {
-        setCreateStatus("error");
-        setCreateError("Stake amount must be at least 0.01 SOL.");
-        return;
-      }
-
-      const payload = {
-        time_per_que: timePerQ,
-        total_questions: totalQuestions,
-        stake_amount: stakeAmount,
-        category: formState.category.trim() || undefined,
-        difficulty: formState.difficulty.trim() || undefined,
-        player1_wallet: walletAddress,
-        userId: user?.id,
-      };
-
-      try {
-        const response = await fetch("/api/create-match", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        const data = (await response.json()) as CreateMatchResponse;
-
-        if (!response.ok || data.status !== "SUCCESS") {
-          const errorMessage =
-            data.status === "FAILED"
-              ? data.error
-              : "Failed to create match";
-          throw new Error(errorMessage);
-        }
-
-        const createdMatch = data.data.match;
-        setCreatedInviteCode(createdMatch.inviteCode);
-        setCreatedRoomStake(createdMatch.stakeAmount);
-        await depositToEscrow({
-          inviteCode: createdMatch.inviteCode,
-          stakeAmount: createdMatch.stakeAmount,
-          role: "creator",
-          setStatus: setCreateDepositStatus,
-        });
-        setCreateStatus("success");
-        if (user) fetchHistory(user.id);
-      } catch (error) {
-        setCreateStatus("error");
-        setCreateDepositStatus("error");
-        setCreateError(
-          error instanceof Error ? error.message : "Failed to create match"
-        );
-        setCreateDepositError(
-          error instanceof Error ? error.message : "Failed to deposit stake"
-        );
-      }
-    },
-    [depositToEscrow, fetchHistory, formState, user, walletAddress]
-  );
-
   const handleJoinRoom = useCallback(
-    async (event: FormEvent<HTMLFormElement>) => {
-      event.preventDefault();
+    async (event: FormEvent<HTMLFormElement> | string) => {
+      if (typeof event !== 'string') {
+        event.preventDefault();
+      }
       setJoinError("");
       setJoinDepositError("");
 
-      const trimmed = joinCode.trim().toUpperCase();
+      const codeToJoin = typeof event === 'string' ? event : joinCode;
+      const trimmed = codeToJoin.trim().toUpperCase();
+      
       if (!trimmed) {
         setJoinError("Enter an invite code.");
         return;
@@ -458,19 +300,27 @@ function Home() {
   );
 
   const handleJoinDeposit = useCallback(async () => {
-    if (!joinRoom) {
+    if (!joinRoom || !publicKey) {
       return;
     }
 
     setJoinDepositError("");
 
     try {
-      await depositToEscrow({
+      const instruction = createJoinEscrowInstruction({
         inviteCode: joinRoom.inviteCode,
-        stakeAmount: joinRoom.stakeAmount,
-        role: "joiner",
-        setStatus: setJoinDepositStatus,
+        player: publicKey,
       });
+
+      setJoinDepositStatus("signing");
+      const transaction = new Transaction().add(instruction);
+      const signature = await sendTransaction(transaction, connection);
+
+      setJoinDepositStatus("confirming");
+      await connection.confirmTransaction(signature, "confirmed");
+      await recordDeposit(joinRoom.inviteCode, signature);
+
+      setJoinDepositStatus("confirmed");
       router.push(`/room/${joinRoom.inviteCode}`);
     } catch (error) {
       setJoinDepositStatus("error");
@@ -478,52 +328,24 @@ function Home() {
         error instanceof Error ? error.message : "Failed to deposit stake"
       );
     }
-  }, [depositToEscrow, joinRoom, router]);
-
-  const handleRetryCreateDeposit = useCallback(async () => {
-    if (!createdInviteCode || !createdRoomStake) {
-      return;
-    }
-
-    setCreateError("");
-    setCreateDepositError("");
-
-    try {
-      await depositToEscrow({
-        inviteCode: createdInviteCode,
-        stakeAmount: createdRoomStake,
-        role: "creator",
-        setStatus: setCreateDepositStatus,
-      });
-      setCreateStatus("success");
-      if (user) fetchHistory(user.id);
-    } catch (error) {
-      setCreateStatus("error");
-      setCreateDepositStatus("error");
-      setCreateDepositError(
-        error instanceof Error ? error.message : "Failed to deposit stake"
-      );
-    }
-  }, [createdInviteCode, createdRoomStake, depositToEscrow, fetchHistory, user]);
+  }, [connection, joinRoom, publicKey, recordDeposit, router, sendTransaction]);
 
   return (
-    <div className="flex flex-1 justify-center bg-zinc-50 text-zinc-900">
-      <main className="flex w-full max-w-5xl flex-col gap-10 px-6 py-12">
-        <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-[0.25em] text-zinc-500">
-              Tryhard Arena
-            </p>
-            <h1 className="text-3xl font-semibold">Dashboard</h1>
-            <p className="max-w-xl text-sm text-zinc-600">
-              Manage your profile, create new quiz rooms, and view your match history.
-            </p>
+    <div className="flex flex-1 justify-center bg-zinc-50 text-zinc-900 min-h-screen">
+      <nav className="fixed w-full flex items-center justify-between px-10 py-4 bg-white/80 backdrop-blur-md z-50 border-b border-zinc-200">
+          <div className="flex gap-2 items-center justify-center text-lg font-bold">
+          <Logo/> tryhard
           </div>
-          {mounted && <WalletMultiButton />}
-        </header>
-
+        <div className="">
+          {
+            walletAddress ? <UserDialog/> : <ConnectWallet />
+          }
+        </div>
+      </nav>
+      
+      <main className="flex w-full max-w-6xl flex-col gap-10 px-6 py-24">
         <section className="grid gap-6 sm:grid-cols-3">
-          <Card className="col-span-1 border-zinc-200 shadow-sm">
+          <Card className="col-span-1 border-zinc-200 shadow-sm bg-white">
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
                 User Profile
@@ -533,16 +355,16 @@ function Home() {
               {ensureStatus === "ready" && user ? (
                 <div className="space-y-4">
                   <div>
-                    <p className="text-base font-medium">{user.username}</p>
-                    <p className="text-xs text-zinc-500 truncate">{user.wallet}</p>
+                    <p className="text-base font-bold">{user.username || "Anonymous"}</p>
+                    <p className="text-[10px] text-zinc-400 font-mono truncate bg-zinc-50 p-1.5 rounded border border-zinc-100 mt-1">{user.wallet}</p>
                   </div>
                   <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline" size="sm" className="w-full text-xs">
-                        <Settings2 className="mr-2 h-3.5 w-3.5" />
-                        Edit Username
-                      </Button>
-                    </DialogTrigger>
+                    <Button variant="outline" size="sm" className="w-full text-xs font-bold" asChild>
+                        <Link href="#">
+                            <Settings2 className="mr-2 h-3.5 w-3.5" />
+                            Edit Username
+                        </Link>
+                    </Button>
                     <DialogContent className="bg-white">
                       <DialogHeader>
                         <DialogTitle>Update Username</DialogTitle>
@@ -569,8 +391,8 @@ function Home() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <p className="text-sm text-zinc-500">
-                    {connected ? "Syncing profile..." : "Awaiting wallet connection."}
+                  <p className="text-sm text-zinc-500 font-medium">
+                    {connected ? "Syncing profile..." : "Connect wallet to view profile."}
                   </p>
                   {ensureStatus === "error" && (
                     <p className="text-xs text-red-500">{ensureError}</p>
@@ -580,25 +402,30 @@ function Home() {
             </CardContent>
           </Card>
 
-          <Card className="col-span-1 border-zinc-200 shadow-sm sm:col-span-2">
-            <CardHeader className="pb-3">
+          <Card className="col-span-1 border-zinc-200 shadow-sm sm:col-span-2 bg-white">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
                 Join a Room
               </CardTitle>
+              <Link href="/new">
+                <Button size="sm" className="bg-zinc-900 text-white font-bold rounded-lg px-4">
+                  <Plus className="mr-2 h-4 w-4" /> Create Room
+                </Button>
+              </Link>
             </CardHeader>
             <CardContent>
               <form className="flex gap-3" onSubmit={handleJoinRoom}>
                 <Input
                   value={joinCode}
                   onChange={(event) => setJoinCode(event.target.value)}
-                  className="flex-1"
+                  className="flex-1 h-12 text-lg font-bold"
                   placeholder="INVITE CODE (e.g. ABC123)"
                 />
-                <Button type="submit" className="bg-zinc-900 text-white">
-                  {joinDepositStatus === "loading" ? "Checking..." : "Join"}
+                <Button type="submit" className="bg-zinc-900 text-white h-12 px-8 font-bold text-lg">
+                  {joinDepositStatus === "loading" ? "..." : "Join"}
                 </Button>
               </form>
-              {joinError && <p className="mt-2 text-xs text-red-500">{joinError}</p>}
+              {joinError && <p className="mt-2 text-xs text-red-500 font-bold">{joinError}</p>}
               <Dialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
                 <DialogContent className="bg-white">
                   <DialogHeader>
@@ -627,7 +454,7 @@ function Home() {
                           joinDepositStatus === "signing" ||
                           joinDepositStatus === "confirming"
                         }
-                        className="w-full bg-zinc-900 text-white"
+                        className="w-full bg-zinc-900 text-white h-12 font-bold"
                       >
                         {joinDepositStatus === "signing"
                           ? "Sign deposit..."
@@ -648,120 +475,81 @@ function Home() {
 
         <div className="grid gap-10 lg:grid-cols-5">
           <section className="lg:col-span-3 space-y-6">
-            <h2 className="text-xl font-semibold">Create New Game</h2>
-            <Card className="border-zinc-200 shadow-sm">
-              <CardContent className="pt-6">
-                <form className="grid gap-6" onSubmit={handleCreateRoom}>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="flex flex-col gap-2 text-sm font-medium">
-                      Category
-                      <Input
-                        name="category"
-                        value={formState.category}
-                        onChange={handleFormChange}
-                        placeholder="General"
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm font-medium">
-                      Difficulty
-                      <select
-                        name="difficulty"
-                        value={formState.difficulty}
-                        onChange={handleFormChange}
-                        className="flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-zinc-950"
-                      >
-                        <option value="easy">Easy</option>
-                        <option value="medium">Medium</option>
-                        <option value="hard">Hard</option>
-                      </select>
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm font-medium">
-                      Questions
-                      <Input
-                        name="totalQuestions"
-                        type="number"
-                        min={1}
-                        value={formState.totalQuestions}
-                        onChange={handleFormChange}
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm font-medium">
-                      Time (sec/Q)
-                      <Input
-                        name="timePerQ"
-                        type="number"
-                        min={5}
-                        value={formState.timePerQ}
-                        onChange={handleFormChange}
-                      />
-                    </label>
-                    <label className="flex flex-col gap-2 text-sm font-medium">
-                      Stake (SOL)
-                      <Input
-                        name="stakeAmount"
-                        type="number"
-                        min={0.01}
-                        step="any"
-                        value={formState.stakeAmount}
-                        onChange={handleFormChange}
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    <Button
-                      type="submit"
-                      disabled={!connected || ensureStatus !== "ready" || createStatus === "loading"}
-                      className="bg-zinc-900 text-white w-full sm:w-fit"
-                    >
-                      {createStatus === "loading"
-                        ? createDepositStatus === "signing"
-                          ? "Sign stake..."
-                          : createDepositStatus === "confirming"
-                            ? "Confirming stake..."
-                            : "Creating..."
-                        : "Create Room"}
-                    </Button>
-                    {createStatus === "error" && (
-                      <p className="text-xs text-red-500">{createError}</p>
-                    )}
-                    {createDepositStatus === "error" && createDepositError && (
-                      <p className="text-xs text-red-500">{createDepositError}</p>
-                    )}
-                    {createdInviteCode && createDepositStatus === "error" && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleRetryCreateDeposit}
-                        className="w-full sm:w-fit"
-                      >
-                        Retry stake deposit
-                      </Button>
-                    )}
-                    {createStatus === "success" && createdInviteCode && (
-                      <div className="flex items-center gap-3 rounded-lg bg-emerald-50 p-3 border border-emerald-100">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-emerald-800">Room created and stake deposited!</p>
-                          <p className="text-xs text-emerald-600">Code: <span className="font-bold">{createdInviteCode}</span></p>
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-black flex items-center gap-2">
+                <Globe className="h-6 w-6 text-zinc-400" /> Public Matches
+              </h2>
+              <Button variant="ghost" size="sm" onClick={fetchAllMatches} disabled={isLoadingAllMatches}>
+                Refresh
+              </Button>
+            </div>
+            
+            <div className="grid gap-4 sm:grid-cols-2">
+              {isLoadingAllMatches ? (
+                [1, 2, 3, 4].map((i) => (
+                  <div key={i} className="h-40 w-full animate-pulse rounded-2xl bg-zinc-100" />
+                ))
+              ) : allMatches.length > 0 ? (
+                allMatches.map((match) => (
+                  <Card key={match.id} className="border-zinc-200 overflow-hidden hover:border-zinc-400 transition-all group bg-white shadow-sm">
+                    <div className="p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex flex-col">
+                            <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Invite Code</span>
+                            <span className="text-lg font-black text-zinc-900">{match.inviteCode}</span>
                         </div>
-                        <Link
-                          href={`/room/${createdInviteCode}`}
-                          className="inline-flex h-8 items-center rounded-md bg-emerald-600 px-3 text-xs font-semibold text-white hover:bg-emerald-700"
-                        >
-                          Join Now
-                        </Link>
+                        <div className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-tighter ${
+                          match.status === 'WAITING' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                          match.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
+                          'bg-zinc-100 text-zinc-600 border border-zinc-200'
+                        }`}>
+                          {match.status}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </form>
-              </CardContent>
-            </Card>
+                      
+                      <div className="grid grid-cols-2 gap-4 mb-5">
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Stake</span>
+                            <span className="text-sm font-bold">{match.stakeAmount} SOL</span>
+                        </div>
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Players</span>
+                            <span className="text-sm font-bold">{match.players.length}/{match.totalPlayers}</span>
+                        </div>
+                      </div>
+
+                      {match.status === 'WAITING' && (
+                        <Button 
+                            onClick={() => handleJoinRoom(match.inviteCode)}
+                            className="w-full bg-zinc-900 text-white font-bold group-hover:bg-zinc-800 transition-colors"
+                        >
+                            Join Match
+                        </Button>
+                      )}
+                      
+                      {match.status !== 'WAITING' && (
+                        <Link href={`/room/${match.inviteCode}`}>
+                            <Button variant="outline" className="w-full font-bold">
+                                View Details
+                            </Button>
+                        </Link>
+                      )}
+                    </div>
+                  </Card>
+                ))
+              ) : (
+                <div className="col-span-full rounded-2xl border border-dashed border-zinc-200 p-12 text-center bg-white">
+                  <p className="text-sm text-zinc-500 font-medium">No public matches available.</p>
+                </div>
+              )}
+            </div>
           </section>
 
           <section className="lg:col-span-2 space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold">Match History</h2>
-              <Clock className="h-4 w-4 text-zinc-400" />
+              <h2 className="text-xl font-bold flex items-center gap-2">
+                <Clock className="h-5 w-5 text-zinc-400" /> Your History
+              </h2>
             </div>
             
             <div className="space-y-3">
@@ -777,13 +565,13 @@ function Home() {
                   const myScore = match.players.find(p => p.userId === user?.id)?.score ?? 0;
 
                   return (
-                    <Card key={match.id} className="border-zinc-200 overflow-hidden hover:border-zinc-300 transition-colors">
+                    <Card key={match.id} className="border-zinc-200 overflow-hidden hover:border-zinc-300 transition-colors bg-white shadow-sm">
                       <div className="flex">
                         <div className={`w-1.5 ${match.status === 'FINISHED' ? (isWinner ? 'bg-emerald-500' : 'bg-red-500') : 'bg-amber-500'}`} />
                         <div className="flex-1 p-4">
                           <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">{match.inviteCode}</span>
-                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${
+                            <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">{match.inviteCode}</span>
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-black uppercase tracking-tighter ${
                               match.status === 'FINISHED' 
                                 ? (isWinner ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')
                                 : 'bg-amber-100 text-amber-700'
@@ -792,16 +580,16 @@ function Home() {
                             </span>
                           </div>
                           <div className="grid grid-cols-2 gap-y-2">
-                            <div className="flex items-center text-xs text-zinc-600">
+                            <div className="flex items-center text-xs text-zinc-600 font-medium">
                               <Trophy className="mr-1.5 h-3 w-3" />
-                              <span className="font-medium">{myScore} pts</span>
+                              <span>{myScore} pts</span>
                             </div>
-                            <div className="flex items-center text-xs text-zinc-600">
+                            <div className="flex items-center text-xs text-zinc-600 font-medium">
                               <Users className="mr-1.5 h-3 w-3" />
-                              <span>{match.totalPlayers} Players</span>
+                              <span>{match.players.length} Players</span>
                             </div>
-                            <div className="flex items-center text-xs text-zinc-600">
-                              <span className="mr-1.5">💰</span>
+                            <div className="flex items-center text-xs text-zinc-600 font-medium">
+                              <span className="mr-1.5 text-[10px]">💰</span>
                               <span>{match.stakeAmount} SOL</span>
                             </div>
                             <div className="flex items-center text-xs text-zinc-400">
@@ -811,7 +599,7 @@ function Home() {
                           </div>
                           <Link 
                             href={`/room/${match.inviteCode}`}
-                            className="mt-3 flex items-center text-xs font-semibold text-zinc-900 hover:underline"
+                            className="mt-3 flex items-center text-[10px] font-black text-zinc-900 hover:underline uppercase tracking-widest"
                           >
                             View Details <ArrowRight className="ml-1 h-3 w-3" />
                           </Link>
@@ -821,8 +609,8 @@ function Home() {
                   );
                 })
               ) : (
-                <div className="rounded-xl border border-dashed border-zinc-200 p-8 text-center">
-                  <p className="text-sm text-zinc-500">No games played yet.</p>
+                <div className="rounded-xl border border-dashed border-zinc-200 p-8 text-center bg-white">
+                  <p className="text-xs text-zinc-500 font-medium">No games played yet.</p>
                 </div>
               )}
             </div>
