@@ -27,7 +27,7 @@ export function Navbar() {
   }, [])
 
   return (
-    <nav className="fixed w-full flex items-center justify-between px-6 md:px-10 py-4 backdrop-blur-md z-50 border-b border-border bg-background/80">
+    <nav className="fixed w-full flex items-center justify-between px-6 md:px-10 py-4 backdrop-blur-md z-50 bg-background/80">
       <Link href="/home" className="flex gap-2 items-center justify-center text-lg font-bold text-foreground">
         <Logo /> tryhard
       </Link>

@@ -17,6 +17,7 @@ import { Trophy, Crown, Medal } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Confetti } from "@/components/ui/confetti";
 
 type UserRecord = {
   id: string;
@@ -160,6 +161,10 @@ export default function RoomPage() {
   const [winners, setWinners] = useState<ScoreEntry[]>([]);
 
   const isCreator = room?.creatorId && user?.id === room.creatorId;
+
+  const userWins = useMemo(() => {
+    return winners.some(w => w.userId === user?.id);
+  }, [winners, user]);
 
   useEffect(() => {
     queueMicrotask(() => setMounted(true));
@@ -865,6 +870,10 @@ export default function RoomPage() {
           )}
         </section>
       </main>
+
+      {phase === "finished" && userWins && (
+        <Confetti className="fixed inset-0 pointer-events-none z-[100]" />
+      )}
     </div>
   );
 }

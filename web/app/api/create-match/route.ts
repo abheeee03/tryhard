@@ -43,9 +43,11 @@ const generateSummary = async (topic: string): Promise<string> => {
     const prompt = `Summarize the topic "${topic}" in one or two short, engaging sentences for a trivia game. Focus on what makes it interesting. Keep it under 150 characters.`;
 
     try {
-        const model = ai.getGenerativeModel({ model: AI_MODEL });
-        const response = await model.generateContent(prompt);
-        return response.response.text()?.trim() || "A trivia match about " + topic;
+        const response = await ai.models.generateContent({
+            model: AI_MODEL,
+            contents: prompt,
+        });
+        return response.text?.trim() || "A trivia match about " + topic;
     } catch (error) {
         console.error("[summary] Error generating summary:", error);
         return "A trivia match about " + topic;
