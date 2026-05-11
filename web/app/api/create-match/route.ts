@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 type CreateMatchBody = {
     time_per_que: number;
     category?: string;
+    name?: string;
     total_questions: number;
     stake_amount?: number;
     difficulty?: string;
@@ -35,6 +36,21 @@ const MAX_INVITE_CODE_ATTEMPTS = 5;
 
 const generateInviteCode = () =>
     crypto.randomBytes(INVITE_CODE_BYTES).toString("hex").toUpperCase();
+
+const generateSummary = async (topic: string): Promise<string> => {
+    if (!ai) return "A trivia match about " + topic;
+
+    const prompt = `Summarize the topic "${topic}" in one or two short, engaging sentences for a trivia game. Focus on what makes it interesting. Keep it under 150 characters.`;
+
+    try {
+        const model = ai.getGenerativeModel({ model: AI_MODEL });
+        const response = await model.generateContent(prompt);
+        return response.response.text()?.trim() || "A trivia match about " + topic;
+    } catch (error) {
+        console.error("[summary] Error generating summary:", error);
+        return "A trivia match about " + topic;
+    }
+};
 
 const createUniqueInviteCode = async (
     tx: Prisma.TransactionClient
@@ -324,12 +340,15 @@ export async function POST(req: NextRequest) {
 
         const resolvedCreatorId = creatorId;
 
+        const matchName = body.name || body.category || "General Trivia";
+        const summary = await generateSummary(matchName);
+
         console.log(
-            `[match] Creating match: user=${resolvedCreatorId}, category=${body.category ?? "none"}, stake=${stakeAmount}`
+            `[match] Creating match: user=${resolvedCreatorId}, name=${matchName}, stake=${stakeAmount}`
         );
 
         const generated = await generateQuestions(
-            body.category,
+            matchName,
             questionCount,
             body.difficulty
         );
@@ -347,6 +366,8 @@ export async function POST(req: NextRequest) {
             const createdMatch = await tx.match.create({
                 data: {
                     creatorId: resolvedCreatorId,
+                    name: matchName,
+                    summary: summary,
                     inviteCode,
                     stakeAmount,
                     totalPlayers,

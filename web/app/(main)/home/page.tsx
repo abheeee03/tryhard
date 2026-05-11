@@ -23,6 +23,7 @@ import {
 import UserDialog from "@/components/ui/user-dialog";
 import Logo from "@/components/logo";
 import { ConnectWallet } from "@/components/ui/connect-wallet";
+import MatchCard from "@/components/ui/match-card";
 
 type UserRecord = {
   id: string;
@@ -34,6 +35,8 @@ type UserRecord = {
 type MatchEntry = {
   id: string;
   inviteCode: string;
+  name: string | null;
+  summary: string | null;
   status: string;
   stakeAmount: number;
   totalPlayers: number;
@@ -386,51 +389,11 @@ function Home() {
               ))
             ) : allMatches.length > 0 ? (
               allMatches.map((match) => (
-                <Card key={match.id} className="border-zinc-200 overflow-hidden hover:border-zinc-400 transition-all group bg-white shadow-sm">
-                  <div className="p-5">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex flex-col">
-                          <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">Invite Code</span>
-                          <span className="text-lg font-black text-zinc-900">{match.inviteCode}</span>
-                      </div>
-                      <div className={`text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-tighter ${
-                        match.status === 'WAITING' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
-                        match.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' :
-                        'bg-zinc-100 text-zinc-600 border border-zinc-200'
-                      }`}>
-                        {match.status}
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-4 mb-5">
-                      <div className="flex flex-col">
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Stake</span>
-                          <span className="text-sm font-bold">{match.stakeAmount} SOL</span>
-                      </div>
-                      <div className="flex flex-col">
-                          <span className="text-[9px] font-bold text-zinc-400 uppercase mb-1">Players</span>
-                          <span className="text-sm font-bold">{match.players.length}/{match.totalPlayers}</span>
-                      </div>
-                    </div>
-
-                    {match.status === 'WAITING' && (
-                      <Button 
-                          onClick={() => handleJoinRoom(match.inviteCode)}
-                          className="w-full bg-zinc-900 text-white font-bold group-hover:bg-zinc-800 transition-colors"
-                      >
-                          Join Match
-                      </Button>
-                    )}
-                    
-                    {match.status !== 'WAITING' && (
-                      <Link href={`/room/${match.inviteCode}`}>
-                          <Button variant="outline" className="w-full font-bold">
-                              View Details
-                          </Button>
-                      </Link>
-                    )}
-                  </div>
-                </Card>
+                <MatchCard 
+                  key={match.id} 
+                  match={match} 
+                  onJoin={handleJoinRoom} 
+                />
               ))
             ) : (
               <div className="col-span-full rounded-2xl border border-dashed border-zinc-200 p-12 text-center bg-white">

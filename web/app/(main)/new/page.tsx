@@ -43,7 +43,7 @@ type DepositResponse =
   | { status: "FAILED"; error: string };
 
 const DEFAULT_FORM = {
-  category: "General",
+  name: "General Trivia",
   difficulty: "easy",
   totalQuestions: "10",
   timePerQ: "20",
@@ -223,7 +223,7 @@ export default function NewMatch() {
         time_per_que: timePerQ,
         total_questions: totalQuestions,
         stake_amount: stakeAmount,
-        category: formState.category.trim() || undefined,
+        name: formState.name.trim() || undefined,
         difficulty: formState.difficulty.trim() || undefined,
         player1_wallet: walletAddress,
         userId: user?.id,
@@ -321,12 +321,12 @@ export default function NewMatch() {
               <form className="grid gap-8" onSubmit={handleCreateRoom}>
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold text-zinc-600">Category</label>
+                    <label className="text-sm font-semibold text-zinc-600">Room Name</label>
                     <Input
-                      name="category"
-                      value={formState.category}
+                      name="name"
+                      value={formState.name}
                       onChange={handleFormChange}
-                      placeholder="General"
+                      placeholder="e.g. 90s Pop Culture"
                       className="h-12"
                     />
                   </div>

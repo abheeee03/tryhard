@@ -25,6 +25,9 @@ model Match {
   creatorId     String
   creator       User @relation("creator", fields: [creatorId], references: [id])
 
+  name          String?
+  summary       String?
+
   inviteCode    String   @unique
 
   stakeAmount   Float

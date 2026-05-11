@@ -359,7 +359,7 @@ const serializeRoom = async (room: RoomState, status: MatchStatusType) => ({
   timePerQ: room.timePerQ,
   stakeAmount: room.stakeAmount,
   creatorId: room.creatorId,
-  depositedPlayers: (await fetchDepositedPlayers(room.matchId)).map((deposit) => ({
+  depositedPlayers: (await fetchDepositedPlayers(room.matchId)).map((deposit: any) => ({
     userId: deposit.userId,
     wallet: deposit.user.wallet,
     username: deposit.user.username,
@@ -477,7 +477,7 @@ const scheduleQuestion = (room: RoomState, index: number) => {
   }
 
   if (index >= room.questions.length) {
-    finishRoom(room).catch((error) => {
+    finishRoom(room).catch((error: any) => {
       console.error("[ws] Failed to finish room:", error);
     });
     return;
@@ -494,7 +494,7 @@ const scheduleQuestion = (room: RoomState, index: number) => {
         where: { id: room.matchId },
         data: { status: MatchStatus.INGAME },
       })
-      .catch((error) => {
+      .catch((error: any) => {
         console.error("[ws] Failed to mark match in-game:", error);
       });
   }
@@ -798,7 +798,7 @@ io.on("connection", (socket) => {
             timeTaken,
           },
         })
-        .catch((error) => {
+        .catch((error: any) => {
           console.error("[ws] Failed to persist answer:", error);
         });
 
