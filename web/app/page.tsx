@@ -1,13 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import localFont from "next/font/local";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence, useScroll, useTransform } from "motion/react";
 import { cn } from "@/lib/utils";
 import { TextAnimate } from "@/components/ui/animated-text"
 import Link from "next/link";
 import Logo from "@/components/logo";
+import { ReactLenis } from "lenis/react";
+import { DotLottieReact } from '@lottiefiles/dotlottie-react';
 
 const font2 = localFont({
   src: "../components/fonts/Regular.woff",
@@ -88,6 +90,152 @@ const Stairs = ({ status, onComplete }: { status: string; onComplete: () => void
   );
 };
 
+const ScrollTransition = () => {
+  const containerRef = useRef(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const { scrollYProgress } = useScroll({
+    target: mounted ? containerRef : undefined,
+    offset: ["start start", "end end"],
+  });
+
+  const scale = useTransform(scrollYProgress, [0, 0.4], [1, 0.5]);
+  const containerPadding = useTransform(scrollYProgress, [0, 0.4], ["2.5rem", "0rem"]);
+  const containerBorderRadius = useTransform(scrollYProgress, [0, 0.4], ["0.75rem", "0rem"]);
+  const contentOpacity = useTransform(scrollYProgress, [0.3, 0.6], [0, 1]);
+  
+  const py = useTransform(scrollYProgress, [0.4, 0.6], ["0rem", "1.25rem"]);
+  const px = useTransform(scrollYProgress, [0.4, 0.6], ["0rem", "0.75rem"]);
+  const borderWidth = useTransform(scrollYProgress, [0.4, 0.6], [0, 1]);
+
+  return (
+    <div ref={containerRef} className="relative h-[250vh] bg-black">
+      <div className="sticky top-0 h-screen overflow-hidden">
+        <motion.div 
+          style={{ padding: containerPadding }}
+          className="h-full w-full"
+        >
+          <motion.div 
+            className="h-full w-full bg-white flex items-center justify-center relative"
+            style={{ borderRadius: containerBorderRadius }}
+          >
+            <motion.div 
+              className="flex flex-col items-center justify-center z-10"
+              style={{ scale }}
+            >
+              <motion.h1 
+                className={cn(
+                  "text-7xl font-black text-center leading-tight",
+                  font2.className
+                )}
+                style={{ 
+                  color: "#000",
+                  borderWidth,
+                  borderStyle: "solid",
+                  borderColor: "rgba(0,0,0,0.1)",
+                  paddingTop: py,
+                  paddingBottom: py,
+                  paddingLeft: px,
+                  paddingRight: px,
+                  borderRadius: "0.5rem"
+                }}
+              >
+                Your Knowledge <br /> Has Value
+              </motion.h1>
+            </motion.div>
+
+            {/* Section 3 Content - Fading in */}
+            <motion.div 
+              className="absolute inset-0 flex items-center justify-center gap-10 px-10 py-5"
+              style={{ opacity: contentOpacity }}
+            >
+              <div className="flex flex-col gap-5">
+                <div className="border border-black/10 h-64 w-72 rounded-2xl px-6 py-8 bg-black/[0.02] flex flex-col items-center text-center">
+                  <div className="h-32 w-32">
+                    <DotLottieReact src="/animation/Bulb Idea Setting.lottie" loop autoplay />
+                  </div>
+                  <h1 className="font-black text-2xl leading-none mt-auto">Create or<br/>Join Match</h1>
+                </div>
+                <div className="border border-black/10 h-64 w-72 rounded-2xl px-6 py-8 bg-black/[0.02] flex flex-col items-center text-center">
+                  <div className="h-32 w-32">
+                    <DotLottieReact src="/animation/coin.lottie" loop autoplay />
+                  </div>
+                  <h1 className="font-black text-2xl leading-none mt-auto">Stake Sol</h1>
+                </div>
+              </div>
+              
+              {/* Spacer for the central text */}
+              <div className="w-80" />
+
+              <div className="flex flex-col gap-5">
+                <div className="border border-black/10 h-64 w-72 rounded-2xl px-6 py-8 bg-black/[0.02] flex flex-col items-center text-center">
+                  <div className="h-32 w-32">
+                    <DotLottieReact src="/animation/Industrial Design.lottie" loop autoplay />
+                  </div>
+                  <h1 className="font-black text-2xl leading-none mt-auto">Answer</h1>
+                </div>
+                <div className="border border-black/10 h-64 w-72 rounded-2xl px-6 py-8 bg-black/[0.02] flex flex-col items-center text-center">
+                  <div className="h-32 w-32">
+                    <DotLottieReact src="/animation/Trophy.lottie" loop autoplay />
+                  </div>
+                  <h1 className="font-black text-2xl leading-none mt-auto">Win</h1>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+const Footer = () => {
+  return (
+    <footer className={cn("bg-black text-white px-10 pt-24 pb-10 border-t border-white/10", font2.className)}>
+      <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start gap-20">
+        <div className="flex flex-col gap-6 max-w-sm">
+          <Logo color="white" />
+          <p className="text-white/60 text-sm leading-relaxed lowercase tracking-wider">
+            the ultimate pvp experience on solana. cook your opponents and get rewarded for what you know.
+          </p>
+        </div>
+        
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-16 uppercase tracking-[0.2em] text-[10px]">
+          <div className="flex flex-col gap-6">
+            <span className="text-white/40">platform</span>
+            <a href="#" className="hover:text-[#14F195] transition-colors">matches</a>
+            <a href="#" className="hover:text-[#14F195] transition-colors">leaderboard</a>
+            <a href="#" className="hover:text-[#14F195] transition-colors">staking</a>
+          </div>
+          <div className="flex flex-col gap-6">
+            <span className="text-white/40">company</span>
+            <a href="#" className="hover:text-[#14F195] transition-colors">about</a>
+            <a href="#" className="hover:text-[#14F195] transition-colors">terms</a>
+            <a href="#" className="hover:text-[#14F195] transition-colors">privacy</a>
+          </div>
+          <div className="flex flex-col gap-6">
+            <span className="text-white/40">social</span>
+            <a href="#" className="hover:text-[#9945FF] transition-colors">x / twitter</a>
+            <a href="#" className="hover:text-[#9945FF] transition-colors">discord</a>
+            <a href="#" className="hover:text-[#9945FF] transition-colors">telegram</a>
+          </div>
+        </div>
+      </div>
+      
+      <div className="max-w-7xl mx-auto mt-32 pt-10 border-t border-white/5 flex flex-col sm:flex-row justify-between items-center gap-6 text-[10px] uppercase tracking-widest text-white/30">
+        <p>© 2026 tryhard protocol. all rights reserved.</p>
+        <div className="flex gap-10">
+          <span>built on solana</span>
+        </div>
+      </div>
+    </footer>
+  );
+};
+
 export default function Home() {
   const [status, setStatus] = useState("loading"); // loading, transitioning, hero
   const [imagesLoaded, setImagesLoaded] = useState(false);
@@ -130,6 +278,7 @@ export default function Home() {
   }, [status]);
 
   return (
+    <ReactLenis root>
     <div className="relative bg-black min-h-screen">
       <Stairs status={status} onComplete={() => {}} />
 
@@ -173,7 +322,7 @@ export default function Home() {
             transition={{ duration: 0.8, ease: "easeOut", delay: 0.5 }}
           >
             <a href="">ABOUT</a>
-            <Logo/>
+            <Logo color="white"/>
             <Link href="/home">GET STARTED</Link>
           </motion.nav>
 
@@ -258,43 +407,34 @@ export default function Home() {
             </motion.div>
           </section>
         </motion.main>
-        <div className="h-screen w-full px-10 flex items-center justify-center">
-              <div className="h-full w-full rounded-xl bg-white flex items-center justify-center text-center">
-              <h1 className={cn(
-                "text-7xl font-black"
-                ,font2.className
-              )}
-              >
-                Your Knowledge <br /> Has Value
-              </h1>
+        
+        <ScrollTransition />
+
+        <div className="bg-white min-h-screen flex items-center justify-center px-10 py-20">
+          <div className="max-w-5xl w-full grid grid-cols-1 md:grid-cols-2 gap-20 items-center">
+            <div className="space-y-8">
+              <h2 className={cn("text-6xl font-black leading-none", font2.className)}>
+                Time to lockin <br /> touch grass later.
+              </h2>
+              <p className="text-black/60 text-lg leading-relaxed lowercase tracking-tight">
+                Join players competing in real-time battles. Stake SOL, answer correctly, and take the pool. No luck, just knowledge.
+              </p>
+              <div className="flex gap-4">
+                <Link href="/home" className={cn("bg-black text-white px-8 py-4 rounded-full text-xs font-bold uppercase tracking-widest hover:scale-105 transition-transform", font2.className)}>
+                  Start Now
+                </Link>
               </div>
+            </div>
+            <div className="relative aspect-square bg-black rounded-3xl overflow-hidden flex items-center justify-center p-10">
+               <DotLottieReact src="/animation/Dollar Coins Chest.lottie" loop autoplay />
+            </div>
+          </div>
         </div>
-        <div className="h-screen w-full bg-white px-10 py-5 flex items-center justify-center gap-5">
-          <div className="flex flex-col gap-3">
-            <div className="border h-60 w-70 rounded-md px-3 py-4">
-              <h1 className="font-black text-xl">Create or Join Match</h1>
-            </div>
-            <div className="border h-60 w-70 rounded-md px-3 py-4">
-              <h1 className="font-black text-xl">Stake Sol</h1>
-            </div>
-          </div>
-          <h1 className={cn(
-            "text-4xl border rounded-md py-5 px-3 font-black text-center"
-          )}
-              >
-                Your Knowledge <br /> Has Value
-          </h1>
-          <div className="flex flex-col gap-3">
-            <div className="border h-60 w-70 rounded-md px-3 py-4">
-              <h1 className="font-black text-xl">Answer</h1>
-            </div>
-            <div className="border h-60 w-70 rounded-md px-3 py-4">
-              <h1 className="font-black text-xl">Win</h1>
-            </div>
-          </div>
-          </div>
+
+        <Footer />
         </>
       )}
     </div>
+    </ReactLenis>
   );
 }

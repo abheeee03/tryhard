@@ -13,6 +13,8 @@ import {
   getBackendAuthorityPublicKey,
   solToLamports,
 } from "@/lib/escrow";
+import { Trophy, Crown, Medal } from "lucide-react";
+import Link from "next/link";
 
 type UserRecord = {
   id: string;
@@ -29,6 +31,7 @@ type RoomInfo = {
   timePerQ: number;
   stakeAmount: number;
   creatorId: string;
+  winnerId?: string | null;
   depositedPlayers?: {
     userId: string;
     wallet: string;
@@ -239,6 +242,9 @@ export default function RoomPage() {
 
         if (!cancelled) {
           setRoom(data.data.match);
+          if (data.data.match.status === 'FINISHED') {
+            setPhase('finished');
+          }
           if (data.data.userDeposit.deposited) {
             setDepositStatus("confirmed");
             setDepositSignature(data.data.userDeposit.signature ?? null);
@@ -269,7 +275,8 @@ export default function RoomPage() {
       !user?.id ||
       !walletAddress ||
       !inviteCode ||
-      depositStatus !== "confirmed"
+      depositStatus !== "confirmed" ||
+      room?.status === 'FINISHED'
     ) {
       queueMicrotask(() => {
         setJoinStatus("idle");
@@ -299,7 +306,11 @@ export default function RoomPage() {
 
           setJoinStatus("joined");
           setRoom(response.data.room);
-          setPhase("waiting");
+          if (response.data.room.status === 'FINISHED') {
+             setPhase('finished');
+          } else {
+            setPhase("waiting");
+          }
         }
       );
     });
@@ -366,7 +377,7 @@ export default function RoomPage() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [connected, user?.id, walletAddress, inviteCode, depositStatus]);
+  }, [connected, user?.id, walletAddress, inviteCode, depositStatus, room?.status]);
 
   useEffect(() => {
     if (!question?.endsAt) {
@@ -517,9 +528,9 @@ export default function RoomPage() {
     <div className="flex min-h-screen flex-col bg-zinc-950 text-white">
       <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-6">
         <div className="space-y-1">
-          <p className="text-xs uppercase tracking-[0.4em] text-white/50">
+          <Link href="/home" className="text-xs uppercase tracking-[0.4em] text-white/50 hover:text-white transition-colors">
             Tryhard Arena
-          </p>
+          </Link>
           <h1 className="text-2xl font-semibold">Room {inviteCode}</h1>
           <p className="text-sm text-white/60">
             Stake: {room?.stakeAmount ?? 0} SOL
@@ -528,7 +539,7 @@ export default function RoomPage() {
         {mounted && <WalletMultiButton />}
       </header>
 
-      {connected && user && room && depositStatus !== "confirmed" && (
+      {connected && user && room && depositStatus !== "confirmed" && room.status !== 'FINISHED' && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-6 text-white shadow-2xl">
             <p className="text-xs uppercase tracking-[0.3em] text-white/50">
@@ -620,7 +631,7 @@ export default function RoomPage() {
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <section className="rounded-2xl border border-white/10 bg-white/5 p-6 min-h-[400px] flex flex-col">
           {phase === "waiting" && (
             <div className="space-y-4">
               <div>
@@ -673,22 +684,23 @@ export default function RoomPage() {
           )}
 
           {phase === "starting" && (
-            <div className="space-y-3">
-              <h2 className="text-xl font-semibold">Game starts soon</h2>
-              <p className="text-sm text-white/60">
-                Starting in {Math.ceil((countdownMs ?? 0) / 1000)} seconds.
+            <div className="space-y-3 flex flex-col items-center justify-center flex-1">
+              <div className="w-16 h-16 rounded-full border-4 border-white/10 border-t-white animate-spin mb-4" />
+              <h2 className="text-2xl font-black">GET READY</h2>
+              <p className="text-xl text-white/60 font-mono">
+                {Math.ceil((countdownMs ?? 0) / 1000)}s
               </p>
             </div>
           )}
 
           {phase === "intermission" && (
-            <div className="space-y-3">
-              <h2 className="text-xl font-semibold">Next question incoming</h2>
-              <p className="text-sm text-white/60">
-                Next question in {Math.ceil((countdownMs ?? 0) / 1000)} seconds.
+            <div className="space-y-3 flex flex-col items-center justify-center flex-1">
+              <h2 className="text-xl font-semibold text-white/60 uppercase tracking-widest">Next question in</h2>
+              <p className="text-4xl font-black font-mono">
+                {Math.ceil((countdownMs ?? 0) / 1000)}s
               </p>
               {intermission?.nextIndex !== undefined && room && (
-                <p className="text-xs text-white/40">
+                <p className="mt-4 text-xs text-white/40 font-bold uppercase tracking-tighter">
                   Question {intermission.nextIndex + 1} of {room.questionCount}
                 </p>
               )}
@@ -696,22 +708,22 @@ export default function RoomPage() {
           )}
 
           {phase === "question" && question && (
-            <div className="space-y-6">
+            <div className="space-y-6 flex-1 flex flex-col justify-center">
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-white/50">
+                  <p className="text-xs uppercase tracking-[0.3em] text-white/50 font-bold">
                     Question {question.index + 1} of {question.totalQuestions}
                   </p>
-                  <h2 className="mt-2 text-2xl font-semibold">
+                  <h2 className="mt-4 text-3xl font-black leading-tight">
                     {question.question}
                   </h2>
                 </div>
-                <div className="rounded-full border border-white/20 px-4 py-2 text-sm">
-                  {Math.ceil((timeLeftMs ?? 0) / 1000)}s left
+                <div className="flex-shrink-0 w-20 h-20 rounded-full border-4 border-white/10 flex items-center justify-center text-xl font-black font-mono">
+                  {Math.ceil((timeLeftMs ?? 0) / 1000)}
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-4 mt-8 sm:grid-cols-2">
                 {question.options.map((option) => {
                   const isSelected = selectedAnswer === option;
                   return (
@@ -720,10 +732,10 @@ export default function RoomPage() {
                       type="button"
                       onClick={() => handleAnswer(option)}
                       disabled={Boolean(selectedAnswer)}
-                      className={`rounded-xl border px-4 py-3 text-left text-sm transition ${
+                      className={`rounded-2xl border-2 px-6 py-4 text-left text-base font-bold transition-all transform active:scale-95 ${
                         isSelected
-                          ? "border-white bg-white text-zinc-900"
-                          : "border-white/20 bg-white/5 text-white hover:border-white/60"
+                          ? "border-white bg-white text-zinc-950 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
+                          : "border-white/10 bg-white/5 text-white hover:border-white/40 hover:bg-white/10"
                       }`}
                     >
                       {option}
@@ -733,68 +745,105 @@ export default function RoomPage() {
               </div>
 
               {answerFeedback && (
-                <p className="text-sm font-semibold text-white/80">
-                  {answerFeedback}
-                </p>
+                <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10 text-center animate-pulse">
+                    <p className="text-sm font-black uppercase tracking-widest text-white/60">
+                    {answerFeedback}
+                    </p>
+                </div>
               )}
             </div>
           )}
 
           {phase === "finished" && (
-            <div className="space-y-6">
-              <div>
-                <h2 className="text-2xl font-semibold">Match Finished</h2>
-                {winners.length > 0 ? (
-                  <p className="text-sm text-white/70">
-                    Winner{winners.length > 1 ? "s" : ""}: {" "}
-                    <span className="font-bold text-white">
-                      {winners
-                        .map((winner) => winner.username ?? winner.wallet)
-                        .join(", ")}
-                    </span>
-                  </p>
-                ) : (
-                  <p className="text-sm text-white/70">No winner data.</p>
-                )}
+            <div className="space-y-8 flex-1 flex flex-col py-4">
+              <div className="text-center space-y-4">
+                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-500/10 border-2 border-amber-500/20 mb-2">
+                    <Trophy className="w-10 h-10 text-amber-500" />
+                </div>
+                <h2 className="text-4xl font-black tracking-tighter">MATCH FINISHED</h2>
+                
+                <div className="flex flex-col items-center gap-2">
+                    {winners.length > 0 ? (
+                        <div className="flex flex-wrap justify-center gap-4">
+                            {winners.map((winner, idx) => (
+                                <div key={idx} className="flex items-center gap-3 bg-white text-zinc-950 px-6 py-3 rounded-2xl shadow-xl">
+                                    <Crown className="w-6 h-6 text-amber-500" />
+                                    <div className="text-left">
+                                        <p className="text-[10px] font-black uppercase leading-none opacity-60">Winner</p>
+                                        <p className="text-lg font-black leading-tight truncate max-w-[150px]">
+                                            {winner.username ?? winner.wallet.slice(0, 8)}
+                                        </p>
+                                    </div>
+                                    <div className="ml-2 pl-4 border-l border-zinc-200">
+                                        <p className="text-[10px] font-black uppercase leading-none opacity-60">Score</p>
+                                        <p className="text-lg font-black leading-tight">{winner.score}</p>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : room?.winnerId ? (
+                         <div className="flex items-center gap-3 bg-white text-zinc-950 px-6 py-3 rounded-2xl shadow-xl">
+                            <Crown className="w-6 h-6 text-amber-500" />
+                            <div className="text-left">
+                                <p className="text-[10px] font-black uppercase leading-none opacity-60">Winner Found</p>
+                                <p className="text-lg font-black leading-tight">Match Closed</p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl">
+                            <p className="text-sm font-bold text-white/60 italic text-center">Finalizing results...</p>
+                        </div>
+                    )}
+                </div>
               </div>
 
               {leaderboard.length > 0 && (
-                <div className="space-y-4">
-                  <p className="text-xs uppercase tracking-[0.3em] text-white/50">
-                    Final Standings & Answers
-                  </p>
+                <div className="space-y-4 mt-8">
+                  <p className="text-xs uppercase tracking-[0.3em] text-white/50 font-black text-center">Final Standings</p>
                   <div className="grid gap-4">
-                    {leaderboard.map((entry) => (
+                    {leaderboard.map((entry, idx) => (
                       <div
                         key={entry.userId}
-                        className="rounded-xl border border-white/10 bg-white/5 p-4"
+                        className={`rounded-2xl border transition-all ${
+                          entry.userId === user?.id 
+                            ? "bg-white/10 border-white/20 shadow-lg scale-[1.02]" 
+                            : "bg-white/5 border-white/10"
+                        } p-6`}
                       >
-                        <div className="flex items-center justify-between border-b border-white/10 pb-3 mb-3">
-                          <span className="font-semibold">
-                            {entry.username ?? entry.wallet}
-                            {entry.userId === user?.id && " (You)"}
-                          </span>
-                          <span className="text-lg font-bold text-white">
-                            {entry.score} pts
-                          </span>
+                        <div className="flex items-center justify-between mb-4">
+                          <div className="flex items-center gap-4">
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black ${
+                                idx === 0 ? "bg-amber-500 text-zinc-950" : "bg-white/10 text-white"
+                            }`}>
+                                {idx + 1}
+                            </div>
+                            <div>
+                                <p className="text-lg font-black flex items-center gap-2">
+                                    {entry.username ?? entry.wallet.slice(0, 12)}
+                                    {entry.userId === user?.id && <span className="text-[10px] bg-white text-zinc-950 px-2 py-0.5 rounded-full uppercase tracking-widest font-black">You</span>}
+                                </p>
+                                <p className="text-xs font-mono text-white/40">{entry.wallet.slice(0, 24)}...</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-3xl font-black tracking-tighter">{entry.score}</p>
+                            <p className="text-[10px] font-black uppercase text-white/40 tracking-widest">Points</p>
+                          </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-                          {entry.answers?.map((ans, idx) => (
+                        
+                        <div className="flex flex-wrap gap-2 pt-4 border-t border-white/10">
+                          {entry.answers?.map((ans, ansIdx) => (
                             <div
-                              key={idx}
-                              className={`flex flex-col rounded-lg px-3 py-2 text-[10px] uppercase tracking-tighter ${
+                              key={ansIdx}
+                              className={`flex flex-col items-center justify-center min-w-[60px] rounded-lg px-2 py-2 text-[9px] uppercase tracking-tighter border transition-all ${
                                 ans.isCorrect
-                                  ? "bg-green-500/10 text-green-400 border border-green-500/20"
-                                  : "bg-red-500/10 text-red-400 border border-red-500/20"
+                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
+                                  : "bg-red-500/10 text-red-400 border-red-500/20"
                               }`}
                             >
-                              <span className="opacity-60">Q{idx + 1}</span>
-                              <span className="truncate font-bold">
-                                {ans.isCorrect ? "Correct" : "Wrong"}
-                              </span>
-                              <span className="truncate opacity-80">
-                                {ans.selected}
-                              </span>
+                              <span className="opacity-50 font-bold mb-1">Q{ansIdx + 1}</span>
+                              {ans.isCorrect ? <Crown className="w-3 h-3 mb-1" /> : <Medal className="w-3 h-3 mb-1 opacity-20" />}
+                              <span className="font-black">{ans.isCorrect ? "Correct" : "Miss"}</span>
                             </div>
                           ))}
                         </div>
@@ -803,6 +852,14 @@ export default function RoomPage() {
                   </div>
                 </div>
               )}
+              
+              <div className="mt-8 flex justify-center">
+                  <Link href="/home">
+                    <button className="bg-white text-zinc-950 px-8 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-colors shadow-lg">
+                        Back to Lobby
+                    </button>
+                  </Link>
+              </div>
             </div>
           )}
         </section>
