@@ -37,7 +37,7 @@ export function ConnectWallet() {
           {content}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md bg-white border-zinc-200">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-2xl font-black text-center mb-4">Connect Wallet</DialogTitle>
         </DialogHeader>
@@ -47,10 +47,10 @@ export function ConnectWallet() {
               <button
                 key={w.adapter.name}
                 onClick={() => handleConnect(w.adapter.name)}
-                className="w-full group rounded-2xl border border-zinc-100 p-4 flex items-center justify-between hover:bg-zinc-50 hover:border-zinc-300 transition-all duration-200"
+                className="w-full group rounded-2xl border border-border p-4 flex items-center justify-between hover:bg-muted/50 hover:border-primary/30 transition-all duration-200"
               >
                 <div className="flex items-center gap-4">
-                  <div className="relative w-10 h-10 flex items-center justify-center bg-zinc-100 rounded-xl group-hover:bg-white transition-colors">
+                  <div className="relative w-10 h-10 flex items-center justify-center bg-muted rounded-xl group-hover:bg-background transition-colors">
                     {w.adapter.icon && (
                       <img
                         src={w.adapter.icon}
@@ -59,19 +59,19 @@ export function ConnectWallet() {
                       />
                     )}
                   </div>
-                  <span className="text-lg font-bold text-zinc-700">
+                  <span className="text-lg font-bold text-foreground/80 group-hover:text-foreground">
                     {w.adapter.name}
                   </span>
                 </div>
                 {w.readyState === 'Installed' && (
-                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-50 px-2 py-1 rounded-md">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-md">
                     Detected
                   </span>
                 )}
               </button>
             ))
           ) : (
-            <div className="text-center py-8 text-zinc-500 font-medium">
+            <div className="text-center py-8 text-muted-foreground font-medium">
               No wallets found. Please install a Solana wallet.
             </div>
           )}

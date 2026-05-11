@@ -9,6 +9,8 @@ import {
 import { clusterApiUrl } from '@solana/web3.js';
 import '@solana/wallet-adapter-react-ui/styles.css';
 
+import { Navbar } from '@/components/navbar';
+
 export default function RootLayout({children}: {children: ReactNode}){
     // The network can be set to 'devnet', 'testnet', or 'mainnet-beta'.
     const network = WalletAdapterNetwork.Devnet;
@@ -22,7 +24,12 @@ export default function RootLayout({children}: {children: ReactNode}){
         <ConnectionProvider endpoint={endpoint}>
             <WalletProvider wallets={wallets} autoConnect>
                 <WalletModalProvider>
-                {children}
+                    <div className="flex flex-col min-h-screen">
+                        <Navbar />
+                        <div className="flex-1">
+                            {children}
+                        </div>
+                    </div>
                 </WalletModalProvider>
             </WalletProvider>
         </ConnectionProvider>

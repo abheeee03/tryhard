@@ -15,6 +15,8 @@ import {
 } from "@/lib/escrow";
 import { Trophy, Crown, Medal } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 
 type UserRecord = {
   id: string;
@@ -525,44 +527,43 @@ export default function RoomPage() {
   );
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-950 text-white">
-      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-6">
+    <div className="flex min-h-screen flex-col bg-background text-foreground pt-16">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-4 bg-card/50 backdrop-blur-sm">
         <div className="space-y-1">
-          <Link href="/home" className="text-xs uppercase tracking-[0.4em] text-white/50 hover:text-white transition-colors">
+          <Link href="/home" className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground hover:text-foreground transition-colors font-black">
             Tryhard Arena
           </Link>
-          <h1 className="text-2xl font-semibold">Room {inviteCode}</h1>
-          <p className="text-sm text-white/60">
+          <h1 className="text-xl font-black">Room {inviteCode}</h1>
+          <p className="text-xs font-bold text-muted-foreground">
             Stake: {room?.stakeAmount ?? 0} SOL
           </p>
         </div>
-        {mounted && <WalletMultiButton />}
       </header>
 
       {connected && user && room && depositStatus !== "confirmed" && room.status !== 'FINISHED' && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-6 text-white shadow-2xl">
-            <p className="text-xs uppercase tracking-[0.3em] text-white/50">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-background/80 px-4 backdrop-blur-sm">
+          <Card className="w-full max-w-md border-border bg-card p-6 text-foreground shadow-2xl">
+            <p className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground font-black">
               Stake required
             </p>
-            <h2 className="mt-2 text-xl font-semibold">
+            <h2 className="mt-2 text-xl font-black">
               Deposit {room.stakeAmount} SOL to enter
             </h2>
-            <div className="mt-4 space-y-2 rounded-xl border border-white/10 bg-white/5 p-4 text-sm">
+            <div className="mt-4 space-y-2 rounded-xl border border-border bg-muted/50 p-4 text-sm">
               <div className="flex justify-between">
-                <span className="text-white/50">Room</span>
-                <span>{room.inviteCode}</span>
+                <span className="text-muted-foreground font-medium">Room</span>
+                <span className="font-bold">{room.inviteCode}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-white/50">Players</span>
-                <span>{room.currentPlayers}/{room.totalPlayers}</span>
+                <span className="text-muted-foreground font-medium">Players</span>
+                <span className="font-bold">{room.currentPlayers}/{room.totalPlayers}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-white/50">Role</span>
-                <span>{isCreator ? "Creator" : "Player 2"}</span>
+                <span className="text-muted-foreground font-medium">Role</span>
+                <span className="font-bold">{isCreator ? "Creator" : "Player 2"}</span>
               </div>
             </div>
-            <button
+            <Button
               type="button"
               onClick={handleDeposit}
               disabled={
@@ -570,7 +571,7 @@ export default function RoomPage() {
                 depositStatus === "signing" ||
                 depositStatus === "confirming"
               }
-              className="mt-5 h-11 w-full rounded-full bg-white px-6 text-sm font-semibold text-zinc-900 disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-6 w-full h-12 font-black uppercase tracking-widest"
             >
               {depositStatus === "loading"
                 ? "Loading room..."
@@ -579,104 +580,104 @@ export default function RoomPage() {
                   : depositStatus === "confirming"
                     ? "Confirming..."
                     : "Deposit stake"}
-            </button>
+            </Button>
             {depositError && (
-              <p className="mt-3 text-xs text-red-300">{depositError}</p>
+              <p className="mt-3 text-xs text-destructive font-bold">{depositError}</p>
             )}
-          </div>
+          </Card>
         </div>
       )}
 
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6 px-6 py-10">
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-6">
+        <section className="rounded-2xl border border-border bg-card/30 p-6 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm text-white/60">Wallet</p>
-              <p className="text-base font-semibold">
+              <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest">Wallet</p>
+              <p className="text-base font-bold">
                 {connected ? "Connected" : "Not connected"}
               </p>
-              <p className="text-xs text-white/40">
+              <p className="text-xs font-mono text-muted-foreground/60">
                 {walletAddress || "Connect a wallet to join the room."}
               </p>
             </div>
             <div>
-              <p className="text-sm text-white/60">User</p>
-              <p className="text-base font-semibold">
+              <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest">User</p>
+              <p className="text-base font-bold">
                 {user?.username ?? "-"}
               </p>
               {ensureStatus === "error" && (
-                <p className="text-xs text-red-400">{ensureError}</p>
+                <p className="text-xs text-destructive">{ensureError}</p>
               )}
             </div>
             <div>
-              <p className="text-sm text-white/60">Join status</p>
-              <p className="text-base font-semibold">{joinStatus}</p>
-              {joinError && <p className="text-xs text-red-400">{joinError}</p>}
+              <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest">Status</p>
+              <p className="text-base font-bold capitalize">{joinStatus}</p>
+              {joinError && <p className="text-xs text-destructive">{joinError}</p>}
             </div>
             <div>
-              <p className="text-sm text-white/60">Deposit</p>
-              <p className="text-base font-semibold">{depositStatus}</p>
+              <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest">Deposit</p>
+              <p className="text-base font-bold capitalize">{depositStatus}</p>
               {depositSignature && (
-                <p className="max-w-36 truncate text-xs text-white/40">
+                <p className="max-w-36 truncate text-xs font-mono text-muted-foreground/60">
                   {depositSignature}
                 </p>
               )}
             </div>
             <div>
-              <p className="text-sm text-white/60">Players</p>
-              <p className="text-base font-semibold">
+              <p className="text-[10px] uppercase font-black text-muted-foreground tracking-widest">Players</p>
+              <p className="text-base font-bold">
                 {room ? `${room.currentPlayers}/${room.totalPlayers}` : "-"}
               </p>
             </div>
           </div>
         </section>
 
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-6 min-h-[400px] flex flex-col">
+        <section className="rounded-3xl border border-border bg-card p-8 min-h-[450px] flex flex-col shadow-lg">
           {phase === "waiting" && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div>
-                <h2 className="text-xl font-semibold">Waiting for players</h2>
-                <p className="text-sm text-white/60">
+                <h2 className="text-2xl font-black">Waiting for players</h2>
+                <p className="text-sm text-muted-foreground font-medium">
                   Room is ready. The creator can start the game once everyone is
                   in and both deposits are confirmed.
                 </p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 {Array.from({ length: room?.totalPlayers ?? 2 }, (_, index) => {
                   const deposit = room?.depositedPlayers?.[index];
                   return (
                     <div
                       key={deposit?.userId ?? index}
-                      className="rounded-xl border border-white/10 bg-white/5 p-4"
+                      className="rounded-2xl border border-border bg-muted/30 p-5"
                     >
-                      <p className="text-xs uppercase tracking-[0.25em] text-white/40">
+                      <p className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground font-black">
                         Player {index + 1}
                       </p>
-                      <p className="mt-2 truncate text-sm font-semibold">
+                      <p className="mt-2 truncate text-base font-black">
                         {deposit?.username ?? deposit?.wallet ?? "Waiting"}
                       </p>
                       <p
-                        className={`mt-1 text-xs ${
-                          deposit ? "text-emerald-300" : "text-amber-300"
+                        className={`mt-2 text-xs font-bold ${
+                          deposit ? "text-emerald-500" : "text-amber-500"
                         }`}
                       >
-                        {deposit ? "Deposit confirmed" : "Deposit pending"}
+                        {deposit ? "● Deposit confirmed" : "○ Deposit pending"}
                       </p>
                     </div>
                   );
                 })}
               </div>
               {isCreator && (
-                <div className="flex flex-col gap-2">
-                  <button
+                <div className="flex flex-col gap-2 pt-4">
+                  <Button
                     type="button"
                     onClick={handleStart}
-                    className="h-11 w-fit rounded-full bg-white px-6 text-sm font-semibold text-zinc-900"
+                    className="h-12 w-fit px-10 font-black uppercase tracking-widest"
                   >
                     Start game
-                  </button>
+                  </Button>
                   {startError && (
-                    <p className="text-xs text-red-400">{startError}</p>
+                    <p className="text-xs text-destructive font-bold">{startError}</p>
                   )}
                 </div>
               )}
@@ -685,40 +686,40 @@ export default function RoomPage() {
 
           {phase === "starting" && (
             <div className="space-y-3 flex flex-col items-center justify-center flex-1">
-              <div className="w-16 h-16 rounded-full border-4 border-white/10 border-t-white animate-spin mb-4" />
-              <h2 className="text-2xl font-black">GET READY</h2>
-              <p className="text-xl text-white/60 font-mono">
+              <div className="w-16 h-16 rounded-full border-4 border-muted border-t-primary animate-spin mb-6" />
+              <h2 className="text-4xl font-black tracking-tighter">GET READY</h2>
+              <p className="text-2xl text-muted-foreground font-mono font-black">
                 {Math.ceil((countdownMs ?? 0) / 1000)}s
               </p>
             </div>
           )}
 
           {phase === "intermission" && (
-            <div className="space-y-3 flex flex-col items-center justify-center flex-1">
-              <h2 className="text-xl font-semibold text-white/60 uppercase tracking-widest">Next question in</h2>
-              <p className="text-4xl font-black font-mono">
+            <div className="space-y-3 flex flex-col items-center justify-center flex-1 text-center">
+              <h2 className="text-xl font-black text-muted-foreground uppercase tracking-[0.3em]">Next question in</h2>
+              <p className="text-6xl font-black font-mono tracking-tighter mt-2">
                 {Math.ceil((countdownMs ?? 0) / 1000)}s
               </p>
               {intermission?.nextIndex !== undefined && room && (
-                <p className="mt-4 text-xs text-white/40 font-bold uppercase tracking-tighter">
+                <div className="mt-8 px-4 py-2 rounded-full bg-muted border border-border text-[10px] font-black uppercase tracking-widest">
                   Question {intermission.nextIndex + 1} of {room.questionCount}
-                </p>
+                </div>
               )}
             </div>
           )}
 
           {phase === "question" && question && (
-            <div className="space-y-6 flex-1 flex flex-col justify-center">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.3em] text-white/50 font-bold">
+            <div className="space-y-8 flex-1 flex flex-col justify-center">
+              <div className="flex items-center justify-between gap-6">
+                <div className="flex-1">
+                  <p className="text-[10px] uppercase tracking-[0.3em] text-primary font-black">
                     Question {question.index + 1} of {question.totalQuestions}
                   </p>
-                  <h2 className="mt-4 text-3xl font-black leading-tight">
+                  <h2 className="mt-4 text-3xl font-black leading-tight tracking-tight">
                     {question.question}
                   </h2>
                 </div>
-                <div className="flex-shrink-0 w-20 h-20 rounded-full border-4 border-white/10 flex items-center justify-center text-xl font-black font-mono">
+                <div className="flex-shrink-0 w-24 h-24 rounded-full border-4 border-muted flex items-center justify-center text-3xl font-black font-mono shadow-inner bg-muted/20">
                   {Math.ceil((timeLeftMs ?? 0) / 1000)}
                 </div>
               </div>
@@ -732,10 +733,10 @@ export default function RoomPage() {
                       type="button"
                       onClick={() => handleAnswer(option)}
                       disabled={Boolean(selectedAnswer)}
-                      className={`rounded-2xl border-2 px-6 py-4 text-left text-base font-bold transition-all transform active:scale-95 ${
+                      className={`rounded-2xl border-2 px-6 py-5 text-left text-lg font-black transition-all transform active:scale-[0.98] ${
                         isSelected
-                          ? "border-white bg-white text-zinc-950 shadow-[0_0_20px_rgba(255,255,255,0.3)]"
-                          : "border-white/10 bg-white/5 text-white hover:border-white/40 hover:bg-white/10"
+                          ? "border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/20 scale-[1.02]"
+                          : "border-border bg-muted/30 text-foreground hover:border-primary/40 hover:bg-muted/50"
                       }`}
                     >
                       {option}
@@ -745,8 +746,8 @@ export default function RoomPage() {
               </div>
 
               {answerFeedback && (
-                <div className="mt-4 p-4 rounded-xl bg-white/5 border border-white/10 text-center animate-pulse">
-                    <p className="text-sm font-black uppercase tracking-widest text-white/60">
+                <div className="mt-6 p-4 rounded-2xl bg-muted border border-border text-center animate-pulse">
+                    <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
                     {answerFeedback}
                     </p>
                 </div>
@@ -757,92 +758,92 @@ export default function RoomPage() {
           {phase === "finished" && (
             <div className="space-y-8 flex-1 flex flex-col py-4">
               <div className="text-center space-y-4">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-amber-500/10 border-2 border-amber-500/20 mb-2">
-                    <Trophy className="w-10 h-10 text-amber-500" />
+                <div className="inline-flex items-center justify-center w-24 h-24 rounded-3xl bg-amber-500/10 border-2 border-amber-500/20 mb-2 rotate-3 shadow-xl">
+                    <Trophy className="w-12 h-12 text-amber-500" />
                 </div>
-                <h2 className="text-4xl font-black tracking-tighter">MATCH FINISHED</h2>
+                <h2 className="text-5xl font-black tracking-tighter">MATCH FINISHED</h2>
                 
-                <div className="flex flex-col items-center gap-2">
+                <div className="flex flex-col items-center gap-4 pt-4">
                     {winners.length > 0 ? (
-                        <div className="flex flex-wrap justify-center gap-4">
+                        <div className="flex flex-wrap justify-center gap-6">
                             {winners.map((winner, idx) => (
-                                <div key={idx} className="flex items-center gap-3 bg-white text-zinc-950 px-6 py-3 rounded-2xl shadow-xl">
-                                    <Crown className="w-6 h-6 text-amber-500" />
+                                <div key={idx} className="flex items-center gap-4 bg-foreground text-background px-8 py-4 rounded-2xl shadow-2xl scale-110">
+                                    <Crown className="w-8 h-8 text-amber-500" />
                                     <div className="text-left">
                                         <p className="text-[10px] font-black uppercase leading-none opacity-60">Winner</p>
-                                        <p className="text-lg font-black leading-tight truncate max-w-[150px]">
+                                        <p className="text-xl font-black leading-tight truncate max-w-[180px]">
                                             {winner.username ?? winner.wallet.slice(0, 8)}
                                         </p>
                                     </div>
-                                    <div className="ml-2 pl-4 border-l border-zinc-200">
+                                    <div className="ml-2 pl-6 border-l border-background/20">
                                         <p className="text-[10px] font-black uppercase leading-none opacity-60">Score</p>
-                                        <p className="text-lg font-black leading-tight">{winner.score}</p>
+                                        <p className="text-xl font-black leading-tight">{winner.score}</p>
                                     </div>
                                 </div>
                             ))}
                         </div>
                     ) : room?.winnerId ? (
-                         <div className="flex items-center gap-3 bg-white text-zinc-950 px-6 py-3 rounded-2xl shadow-xl">
-                            <Crown className="w-6 h-6 text-amber-500" />
+                         <div className="flex items-center gap-4 bg-foreground text-background px-8 py-4 rounded-2xl shadow-xl">
+                            <Crown className="w-8 h-8 text-amber-500" />
                             <div className="text-left">
                                 <p className="text-[10px] font-black uppercase leading-none opacity-60">Winner Found</p>
-                                <p className="text-lg font-black leading-tight">Match Closed</p>
+                                <p className="text-xl font-black leading-tight">Match Closed</p>
                             </div>
                         </div>
                     ) : (
-                        <div className="bg-white/5 border border-white/10 px-6 py-3 rounded-2xl">
-                            <p className="text-sm font-bold text-white/60 italic text-center">Finalizing results...</p>
+                        <div className="bg-muted border border-border px-8 py-4 rounded-2xl">
+                            <p className="text-sm font-bold text-muted-foreground italic text-center">Finalizing results...</p>
                         </div>
                     )}
                 </div>
               </div>
 
               {leaderboard.length > 0 && (
-                <div className="space-y-4 mt-8">
-                  <p className="text-xs uppercase tracking-[0.3em] text-white/50 font-black text-center">Final Standings</p>
-                  <div className="grid gap-4">
+                <div className="space-y-6 mt-12">
+                  <p className="text-[10px] uppercase tracking-[0.4em] text-muted-foreground font-black text-center">Final Standings</p>
+                  <div className="grid gap-4 max-w-2xl mx-auto w-full">
                     {leaderboard.map((entry, idx) => (
                       <div
                         key={entry.userId}
                         className={`rounded-2xl border transition-all ${
                           entry.userId === user?.id 
-                            ? "bg-white/10 border-white/20 shadow-lg scale-[1.02]" 
-                            : "bg-white/5 border-white/10"
+                            ? "bg-muted/50 border-primary shadow-lg scale-[1.02]" 
+                            : "bg-muted/20 border-border"
                         } p-6`}
                       >
                         <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg font-black ${
-                                idx === 0 ? "bg-amber-500 text-zinc-950" : "bg-white/10 text-white"
+                          <div className="flex items-center gap-5">
+                            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl font-black ${
+                                idx === 0 ? "bg-amber-500 text-amber-950" : "bg-muted text-foreground"
                             }`}>
                                 {idx + 1}
                             </div>
                             <div>
-                                <p className="text-lg font-black flex items-center gap-2">
+                                <p className="text-xl font-black flex items-center gap-3">
                                     {entry.username ?? entry.wallet.slice(0, 12)}
-                                    {entry.userId === user?.id && <span className="text-[10px] bg-white text-zinc-950 px-2 py-0.5 rounded-full uppercase tracking-widest font-black">You</span>}
+                                    {entry.userId === user?.id && <span className="text-[10px] bg-primary text-primary-foreground px-2 py-0.5 rounded-full uppercase tracking-widest font-black">You</span>}
                                 </p>
-                                <p className="text-xs font-mono text-white/40">{entry.wallet.slice(0, 24)}...</p>
+                                <p className="text-xs font-mono text-muted-foreground">{entry.wallet.slice(0, 24)}...</p>
                             </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-3xl font-black tracking-tighter">{entry.score}</p>
-                            <p className="text-[10px] font-black uppercase text-white/40 tracking-widest">Points</p>
+                            <p className="text-4xl font-black tracking-tighter">{entry.score}</p>
+                            <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest">Points</p>
                           </div>
                         </div>
                         
-                        <div className="flex flex-wrap gap-2 pt-4 border-t border-white/10">
+                        <div className="flex flex-wrap gap-2 pt-6 border-t border-border/50">
                           {entry.answers?.map((ans, ansIdx) => (
                             <div
                               key={ansIdx}
-                              className={`flex flex-col items-center justify-center min-w-[60px] rounded-lg px-2 py-2 text-[9px] uppercase tracking-tighter border transition-all ${
+                              className={`flex flex-col items-center justify-center min-w-[70px] rounded-xl px-3 py-2 text-[10px] uppercase tracking-tighter border transition-all ${
                                 ans.isCorrect
-                                  ? "bg-emerald-500/10 text-emerald-400 border-emerald-500/20"
-                                  : "bg-red-500/10 text-red-400 border-red-500/20"
+                                  ? "bg-emerald-500/10 text-emerald-600 border-emerald-500/20 dark:text-emerald-400"
+                                  : "bg-destructive/10 text-destructive border-destructive/20"
                               }`}
                             >
-                              <span className="opacity-50 font-bold mb-1">Q{ansIdx + 1}</span>
-                              {ans.isCorrect ? <Crown className="w-3 h-3 mb-1" /> : <Medal className="w-3 h-3 mb-1 opacity-20" />}
+                              <span className="opacity-50 font-black mb-1">Q{ansIdx + 1}</span>
+                              {ans.isCorrect ? <Crown className="w-3.5 h-3.5 mb-1" /> : <Medal className="w-3.5 h-3.5 mb-1 opacity-20" />}
                               <span className="font-black">{ans.isCorrect ? "Correct" : "Miss"}</span>
                             </div>
                           ))}
@@ -853,11 +854,11 @@ export default function RoomPage() {
                 </div>
               )}
               
-              <div className="mt-8 flex justify-center">
+              <div className="mt-12 flex justify-center">
                   <Link href="/home">
-                    <button className="bg-white text-zinc-950 px-8 py-3 rounded-2xl font-black uppercase tracking-widest hover:bg-zinc-200 transition-colors shadow-lg">
+                    <Button className="px-10 py-6 h-auto rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl">
                         Back to Lobby
-                    </button>
+                    </Button>
                   </Link>
               </div>
             </div>

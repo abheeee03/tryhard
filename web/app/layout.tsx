@@ -3,6 +3,7 @@ import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import localFont from "next/font/local";
+import { ThemeProvider } from "@/components/theme-provider";
 
 const font = localFont({
   src: "../components/fonts/Regular.woff",
@@ -23,7 +24,14 @@ export default function RootLayout({
       lang="en"
       className={cn("h-full", "antialiased", font.className)}
     >
+      <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
       <body className="min-h-full flex flex-col">{children}</body>
+          </ThemeProvider>
     </html>
   );
 }

@@ -7,10 +7,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Trophy, Clock, Users, ArrowRight, User, Settings2 } from "lucide-react";
-import Logo from "@/components/logo";
-import { ConnectWallet } from "@/components/ui/connect-wallet";
-import UserDialog from "@/components/ui/user-dialog";
+import { Trophy, Clock, Users, ArrowRight, Settings2 } from "lucide-react";
 
 type UserRecord = {
   id: string;
@@ -126,27 +123,16 @@ function UserProfile() {
   }, [fetchHistory, walletAddress]);
 
   return (
-    <div className="flex flex-1 justify-center text-zinc-900 min-h-screen bg-zinc-50/50">
-      <nav className="fixed w-full flex items-center justify-between px-10 py-4 backdrop-blur-md z-50 bg-white/80 border-b border-zinc-100">
-          <div className="flex gap-2 items-center justify-center text-lg font-bold">
-          <Link href="/home" className="flex gap-2 items-center"><Logo/> tryhard</Link>
-          </div>
-        <div className="">
-          {
-            walletAddress ? <UserDialog/> : <ConnectWallet />
-          }
-        </div>
-      </nav>
-      
+    <div className="flex flex-1 justify-center text-foreground min-h-screen bg-background">
       <main className="flex w-full max-w-4xl flex-col gap-10 px-6 py-24">
         {user && (
           <section>
-             <Card className="border-zinc-200 shadow-sm bg-white overflow-hidden">
-              <div className="h-32 bg-gradient-to-r from-zinc-900 to-zinc-700" />
+             <Card className="border-border shadow-sm bg-card overflow-hidden">
+              <div className="h-32 bg-gradient-to-r from-primary to-primary/70" />
               <CardContent className="relative pt-16 pb-8">
                 <div className="absolute -top-12 left-8">
-                  <div className="w-24 h-24 rounded-3xl bg-white p-1 shadow-xl">
-                    <div className="w-full h-full rounded-2xl bg-zinc-900 flex items-center justify-center text-white text-3xl font-black">
+                  <div className="w-24 h-24 rounded-3xl bg-background p-1 shadow-xl">
+                    <div className="w-full h-full rounded-2xl bg-primary flex items-center justify-center text-primary-foreground text-3xl font-black">
                       {user.username ? user.username.slice(0, 2).toUpperCase() : walletAddress.slice(0, 2).toUpperCase()}
                     </div>
                   </div>
@@ -173,24 +159,24 @@ function UserProfile() {
                         <Button variant="ghost" size="icon" onClick={() => {
                           setNewUsername(user.username ?? "");
                           setIsEditMode(true);
-                        }} className="h-8 w-8 text-zinc-400 hover:text-zinc-900">
+                        }} className="h-8 w-8 text-muted-foreground hover:text-foreground">
                           <Settings2 className="h-4 w-4" />
                         </Button>
                       </div>
                     )}
-                    <p className="text-sm font-mono text-zinc-400 flex items-center gap-2">
+                    <p className="text-sm font-mono text-muted-foreground flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-emerald-500" />
                       {walletAddress}
                     </p>
                   </div>
                   
-                  <div className="flex gap-8 border-l border-zinc-100 pl-8">
+                  <div className="flex gap-8 border-l border-border pl-8">
                     <div className="text-center">
-                      <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest mb-1">Total Games</p>
+                      <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-1">Total Games</p>
                       <p className="text-2xl font-black">{history.length}</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-[10px] font-black uppercase text-zinc-400 tracking-widest mb-1">Victories</p>
+                      <p className="text-[10px] font-black uppercase text-muted-foreground tracking-widest mb-1">Victories</p>
                       <p className="text-2xl font-black text-emerald-600">
                         {history.filter(m => m.winnerId === user.id).length}
                       </p>
@@ -205,7 +191,7 @@ function UserProfile() {
         <section className="space-y-6">
           <div className="flex items-center justify-between px-2">
             <h2 className="text-2xl font-black flex items-center gap-2">
-              <Clock className="h-6 w-6 text-zinc-400" /> Your History
+              <Clock className="h-6 w-6 text-muted-foreground" /> Your History
             </h2>
           </div>
           
@@ -213,7 +199,7 @@ function UserProfile() {
             {isLoadingHistory ? (
               <div className="flex flex-col gap-4">
                 {[1, 2, 3].map((i) => (
-                  <div key={i} className="h-28 w-full animate-pulse rounded-xl bg-zinc-100" />
+                  <div key={i} className="h-28 w-full animate-pulse rounded-xl bg-muted" />
                 ))}
               </div>
             ) : history.length > 0 ? (
@@ -222,40 +208,40 @@ function UserProfile() {
                 const myScore = match.players.find(p => p.userId === user?.id)?.score ?? 0;
 
                 return (
-                  <Card key={match.id} className="border-zinc-200 overflow-hidden hover:border-zinc-300 transition-colors bg-white shadow-sm">
+                  <Card key={match.id} className="border-border overflow-hidden hover:border-primary/50 transition-colors bg-card shadow-sm">
                     <div className="flex">
                       <div className="flex-1 p-5">
                         <div className="flex items-center justify-between mb-3">
-                          <span className="text-sm font-black text-zinc-400 uppercase tracking-widest">{match.inviteCode}</span>
+                          <span className="text-sm font-black text-muted-foreground uppercase tracking-widest">{match.inviteCode}</span>
                           <span className={`text-xs px-3 py-1 rounded-full font-black uppercase tracking-tighter ${
                             match.status === 'FINISHED' 
-                              ? (isWinner ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')
-                              : 'bg-amber-100 text-amber-700'
+                              ? (isWinner ? 'bg-emerald-500/10 text-emerald-600' : 'bg-destructive/10 text-destructive')
+                              : 'bg-amber-500/10 text-amber-600'
                           }`}>
                             {match.status === 'FINISHED' ? (isWinner ? 'Victory' : 'Defeat') : match.status}
                           </span>
                         </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-y-4">
-                          <div className="flex items-center text-sm text-zinc-600 font-medium">
-                            <Trophy className="mr-2 h-4 w-4 text-zinc-400" />
+                          <div className="flex items-center text-sm text-muted-foreground font-medium">
+                            <Trophy className="mr-2 h-4 w-4" />
                             <span>{myScore} pts</span>
                           </div>
-                          <div className="flex items-center text-sm text-zinc-600 font-medium">
-                            <Users className="mr-2 h-4 w-4 text-zinc-400" />
+                          <div className="flex items-center text-sm text-muted-foreground font-medium">
+                            <Users className="mr-2 h-4 w-4" />
                             <span>{match.players.length} Players</span>
                           </div>
-                          <div className="flex items-center text-sm text-zinc-600 font-medium">
-                            <span className="mr-2 text-zinc-400">💰</span>
+                          <div className="flex items-center text-sm text-muted-foreground font-medium">
+                            <span className="mr-2 opacity-70">💰</span>
                             <span>{match.stakeAmount} SOL</span>
                           </div>
-                          <div className="flex items-center text-sm text-zinc-400">
+                          <div className="flex items-center text-sm text-muted-foreground">
                             <Clock className="mr-2 h-4 w-4" />
                             <span>{new Date(match.createdAt).toLocaleDateString()}</span>
                           </div>
                         </div>
                         <Link 
                           href={`/room/${match.inviteCode}`}
-                          className="mt-4 inline-flex items-center text-xs font-black text-zinc-900 hover:underline uppercase tracking-widest"
+                          className="mt-4 inline-flex items-center text-xs font-black text-foreground hover:underline uppercase tracking-widest"
                         >
                           View Details <ArrowRight className="ml-1.5 h-4 w-4" />
                         </Link>
@@ -265,8 +251,8 @@ function UserProfile() {
                 );
               })
             ) : (
-              <div className="rounded-xl border border-dashed border-zinc-200 p-12 text-center bg-white">
-                <p className="text-sm text-zinc-500 font-medium">No games played yet.</p>
+              <div className="rounded-xl border border-dashed border-border p-12 text-center bg-card">
+                <p className="text-sm text-muted-foreground font-medium">No games played yet.</p>
               </div>
             )}
           </div>

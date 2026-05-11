@@ -15,10 +15,6 @@ import {
   getBackendAuthorityPublicKey,
   solToLamports,
 } from "@/lib/escrow";
-import Logo from "@/components/logo";
-import UserDialog from "@/components/ui/user-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import ConnectWallet from "@/components/ui/connect-wallet";
 
 type UserRecord = {
   id: string;
@@ -293,20 +289,7 @@ export default function NewMatch() {
   }, [createdInviteCode, createdRoomStake, depositToEscrow]);
 
   return (
-    <div className="flex min-h-screen flex-col bg-zinc-50 text-zinc-900">
-      <nav className="fixed w-full flex items-center justify-between px-10 py-4 bg-white/80 backdrop-blur-md z-50 border-b border-zinc-200">
-        <Link href="/home" className="flex gap-2 items-center justify-center text-lg font-bold">
-          <Logo /> tryhard
-        </Link>
-        <div>
-          {walletAddress ? (
-            <UserDialog />
-          ) : (
-            <ConnectWallet />
-          )}
-        </div>
-      </nav>
-
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <main className="flex-1 mt-20 flex items-center justify-center p-6">
         <div className="w-full max-w-2xl">
           <div className="mb-8 flex items-center justify-between">
@@ -316,12 +299,12 @@ export default function NewMatch() {
             </Link>
           </div>
 
-          <Card className="border-zinc-200 shadow-lg bg-white">
+          <Card className="border-border shadow-lg bg-card">
             <CardContent className="pt-8 px-8 pb-8">
               <form className="grid gap-8" onSubmit={handleCreateRoom}>
                 <div className="grid gap-6 sm:grid-cols-2">
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold text-zinc-600">Room Name</label>
+                    <label className="text-sm font-semibold text-muted-foreground">Room Name</label>
                     <Input
                       name="name"
                       value={formState.name}
@@ -331,20 +314,20 @@ export default function NewMatch() {
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold text-zinc-600">Difficulty</label>
+                    <label className="text-sm font-semibold text-muted-foreground">Difficulty</label>
                     <select
                       name="difficulty"
                       value={formState.difficulty}
                       onChange={handleFormChange}
-                      className="flex h-12 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm ring-offset-white focus:outline-none focus:ring-2 focus:ring-zinc-950"
+                      className="flex h-12 w-full rounded-md border border-border bg-input/50 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
                     >
-                      <option value="easy">Easy</option>
-                      <option value="medium">Medium</option>
-                      <option value="hard">Hard</option>
+                      <option value="easy" className="bg-popover text-popover-foreground">Easy</option>
+                      <option value="medium" className="bg-popover text-popover-foreground">Medium</option>
+                      <option value="hard" className="bg-popover text-popover-foreground">Hard</option>
                     </select>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold text-zinc-600">Questions</label>
+                    <label className="text-sm font-semibold text-muted-foreground">Questions</label>
                     <Input
                       name="totalQuestions"
                       type="number"
@@ -355,7 +338,7 @@ export default function NewMatch() {
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <label className="text-sm font-semibold text-zinc-600">Time (sec/Q)</label>
+                    <label className="text-sm font-semibold text-muted-foreground">Time (sec/Q)</label>
                     <Input
                       name="timePerQ"
                       type="number"
@@ -366,7 +349,7 @@ export default function NewMatch() {
                     />
                   </div>
                   <div className="col-span-full flex flex-col gap-2">
-                    <label className="text-sm font-semibold text-zinc-600">Stake (SOL)</label>
+                    <label className="text-sm font-semibold text-muted-foreground">Stake (SOL)</label>
                     <Input
                       name="stakeAmount"
                       type="number"
@@ -383,7 +366,7 @@ export default function NewMatch() {
                   <Button
                     type="submit"
                     disabled={!connected || ensureStatus !== "ready" || createStatus === "loading"}
-                    className="h-14 bg-zinc-900 text-white text-lg font-bold hover:bg-zinc-800 transition-colors w-full"
+                    className="h-14 text-lg font-bold w-full"
                   >
                     {createStatus === "loading"
                       ? createDepositStatus === "signing"
@@ -395,10 +378,10 @@ export default function NewMatch() {
                   </Button>
                   
                   {createStatus === "error" && (
-                    <p className="text-sm text-red-500 bg-red-50 p-3 rounded-lg border border-red-100">{createError}</p>
+                    <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">{createError}</p>
                   )}
                   {createDepositStatus === "error" && createDepositError && (
-                    <p className="text-sm text-red-500 bg-red-50 p-3 rounded-lg border border-red-100">{createDepositError}</p>
+                    <p className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg border border-destructive/20">{createDepositError}</p>
                   )}
                   
                   {createdInviteCode && createDepositStatus === "error" && (
@@ -413,10 +396,10 @@ export default function NewMatch() {
                   )}
                   
                   {createStatus === "success" && createdInviteCode && (
-                    <div className="flex items-center gap-4 rounded-xl bg-emerald-50 p-4 border border-emerald-100">
+                    <div className="flex items-center gap-4 rounded-xl bg-emerald-500/10 p-4 border border-emerald-500/20">
                       <div className="flex-1">
-                        <p className="text-base font-bold text-emerald-800">Room created and stake deposited!</p>
-                        <p className="text-sm text-emerald-600">Invite Code: <span className="font-black select-all">{createdInviteCode}</span></p>
+                        <p className="text-base font-bold text-emerald-600 dark:text-emerald-400">Room created and stake deposited!</p>
+                        <p className="text-sm text-emerald-600/80 dark:text-emerald-400/80">Invite Code: <span className="font-black select-all text-foreground">{createdInviteCode}</span></p>
                       </div>
                       <Link
                         href={`/room/${createdInviteCode}`}

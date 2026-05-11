@@ -15,14 +15,10 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
 import { Globe, Plus } from "lucide-react";
 import {
   createJoinEscrowInstruction,
 } from "@/lib/escrow";
-import UserDialog from "@/components/ui/user-dialog";
-import Logo from "@/components/logo";
-import { ConnectWallet } from "@/components/ui/connect-wallet";
 import MatchCard from "@/components/ui/match-card";
 
 type UserRecord = {
@@ -276,18 +272,7 @@ function Home() {
   if (!mounted) return null;
 
   return (
-    <div className="flex flex-1 justify-center text-zinc-900 min-h-screen">
-      <nav className="fixed w-full flex items-center justify-between px-10 py-4 backdrop-blur-md z-50">
-          <div className="flex gap-2 items-center justify-center text-lg font-bold">
-          <Logo/> tryhard
-          </div>
-        <div className="">
-          {
-            walletAddress ? <UserDialog/> : <ConnectWallet />
-          }
-        </div>
-      </nav>
-      
+    <div className="flex flex-1 justify-center text-foreground min-h-screen">
       <main className="flex w-full max-w-6xl flex-col gap-10 px-6 py-24">
         <section className="flex gap-4">
           <Button 
@@ -296,19 +281,19 @@ function Home() {
               setJoinError("");
               setJoinCodeDialogOpen(true);
             }} 
-            className="bg-zinc-900 text-white h-12 px-8 font-bold text-lg"
+            className="h-12 px-8 font-bold text-lg"
           >
             Enter Invite Code
           </Button>
           <Link href="/new">
-            <Button className="bg-zinc-100 text-zinc-900 border-2 border-zinc-900 hover:bg-zinc-200 h-12 px-8 font-bold text-lg flex items-center gap-2">
+            <Button variant="outline" className="border-2 h-12 px-8 font-bold text-lg flex items-center gap-2">
               <Plus className="w-5 h-5" /> Create Room
             </Button>
           </Link>
         </section>
 
         <Dialog open={joinCodeDialogOpen} onOpenChange={setJoinCodeDialogOpen}>
-          <DialogContent className="bg-white">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Enter Invite Code</DialogTitle>
             </DialogHeader>
@@ -320,8 +305,8 @@ function Home() {
                 placeholder="INVITE CODE (e.g. ABC123)"
                 autoFocus
               />
-              {joinError && <p className="text-xs text-red-500 font-bold">{joinError}</p>}
-              <Button type="submit" className="bg-zinc-900 text-white h-12 px-8 font-bold text-lg w-full" disabled={joinDepositStatus === "loading"}>
+              {joinError && <p className="text-xs text-destructive font-bold">{joinError}</p>}
+              <Button type="submit" className="h-12 px-8 font-bold text-lg w-full" disabled={joinDepositStatus === "loading"}>
                 {joinDepositStatus === "loading" ? "Loading..." : "Proceed"}
               </Button>
             </form>
@@ -329,23 +314,23 @@ function Home() {
         </Dialog>
 
         <Dialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
-          <DialogContent className="bg-white">
+          <DialogContent>
             <DialogHeader>
               <DialogTitle>Deposit stake to join</DialogTitle>
             </DialogHeader>
             {joinRoom && (
               <div className="space-y-4">
-                <div className="rounded-lg border border-zinc-200 p-4 text-sm">
+                <div className="rounded-lg border border-border p-4 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-zinc-500">Room</span>
+                    <span className="text-muted-foreground">Room</span>
                     <span className="font-semibold">{joinRoom.inviteCode}</span>
                   </div>
                   <div className="mt-2 flex justify-between">
-                    <span className="text-zinc-500">Stake required</span>
+                    <span className="text-muted-foreground">Stake required</span>
                     <span className="font-semibold">{joinRoom.stakeAmount} SOL</span>
                   </div>
                   <div className="mt-2 flex justify-between">
-                    <span className="text-zinc-500">Questions</span>
+                    <span className="text-muted-foreground">Questions</span>
                     <span className="font-semibold">{joinRoom.questionCount}</span>
                   </div>
                 </div>
@@ -356,7 +341,7 @@ function Home() {
                     joinDepositStatus === "signing" ||
                     joinDepositStatus === "confirming"
                   }
-                  className="w-full bg-zinc-900 text-white h-12 font-bold"
+                  className="w-full h-12 font-bold"
                 >
                   {joinDepositStatus === "signing"
                     ? "Sign deposit..."
@@ -365,7 +350,7 @@ function Home() {
                       : `Deposit ${joinRoom.stakeAmount} SOL`}
                 </Button>
                 {joinDepositError && (
-                  <p className="text-xs text-red-500">{joinDepositError}</p>
+                  <p className="text-xs text-destructive">{joinDepositError}</p>
                 )}
               </div>
             )}
@@ -375,7 +360,7 @@ function Home() {
         <section className="space-y-6">
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-black flex items-center gap-2">
-              <Globe className="h-6 w-6 text-zinc-400" /> Public Matches
+              <Globe className="h-6 w-6 text-muted-foreground" /> Public Matches
             </h2>
             <Button variant="ghost" size="sm" onClick={fetchAllMatches} disabled={isLoadingAllMatches}>
               Refresh
@@ -385,7 +370,7 @@ function Home() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {isLoadingAllMatches ? (
               [1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="h-40 w-full animate-pulse rounded-2xl bg-zinc-100" />
+                <div key={i} className="h-40 w-full animate-pulse rounded-2xl bg-muted" />
               ))
             ) : allMatches.length > 0 ? (
               allMatches.map((match) => (
@@ -396,8 +381,8 @@ function Home() {
                 />
               ))
             ) : (
-              <div className="col-span-full rounded-2xl border border-dashed border-zinc-200 p-12 text-center bg-white">
-                <p className="text-sm text-zinc-500 font-medium">No public matches available.</p>
+              <div className="col-span-full rounded-2xl border border-dashed border-border p-12 text-center bg-card">
+                <p className="text-sm text-muted-foreground font-medium">No public matches available.</p>
               </div>
             )}
           </div>
