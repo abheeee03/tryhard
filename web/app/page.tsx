@@ -287,7 +287,7 @@ export default function Home() {
           <motion.div
             key="preloader"
             className={cn(
-              "h-screen w-full bg-white flex items-center justify-center uppercase flex-col text-7xl font-bold fixed inset-0 z-50",
+              "h-screen w-full bg-white text-black flex items-center justify-center uppercase flex-col text-7xl font-bold fixed inset-0 z-50",
               font2.className
             )}
           >
